@@ -18,23 +18,21 @@
 
 package org.apache.hadoop.yarn.server.nodemanager;
 
-import static org.apache.hadoop.fs.CreateFlag.CREATE;
-import static org.apache.hadoop.fs.CreateFlag.OVERWRITE;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.*;
+import org.apache.hadoop.fs.permission.FsPermission;
+import org.apache.hadoop.security.UserGroupInformation;
+import org.apache.hadoop.yarn.api.records.*;
+import org.apache.hadoop.yarn.conf.YarnConfiguration;
+import org.apache.hadoop.yarn.exceptions.ConfigurationException;
+import org.apache.hadoop.yarn.server.nodemanager.ContainerExecutor.Signal;
+import org.apache.hadoop.yarn.server.nodemanager.containermanager.container.Container;
 import org.apache.hadoop.yarn.server.nodemanager.containermanager.linux.runtime.LinuxContainerRuntime;
-import org.apache.hadoop.yarn.server.nodemanager.executor.ContainerExecContext;
-import org.apache.hadoop.yarn.server.nodemanager.executor.ContainerReapContext;
+import org.apache.hadoop.yarn.server.nodemanager.containermanager.localizer.ContainerLocalizer;
+import org.apache.hadoop.yarn.server.nodemanager.containermanager.localizer.AbstractResourceLocalizationService;
+import org.apache.hadoop.yarn.server.nodemanager.executor.*;
+import org.apache.hadoop.yarn.server.nodemanager.util.LCEResourcesHandler;
+import org.junit.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -43,43 +41,13 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.net.InetSocketAddress;
-import java.util.ArrayList;
-import java.util.EnumSet;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.CommonConfigurationKeysPublic;
-import org.apache.hadoop.fs.FileContext;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileUtil;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.permission.FsPermission;
-import org.apache.hadoop.security.UserGroupInformation;
-import org.apache.hadoop.yarn.api.records.ApplicationAttemptId;
-import org.apache.hadoop.yarn.api.records.ApplicationId;
-import org.apache.hadoop.yarn.api.records.ContainerId;
-import org.apache.hadoop.yarn.api.records.ContainerLaunchContext;
-import org.apache.hadoop.yarn.api.records.Resource;
-import org.apache.hadoop.yarn.conf.YarnConfiguration;
-import org.apache.hadoop.yarn.exceptions.ConfigurationException;
-import org.apache.hadoop.yarn.server.nodemanager.ContainerExecutor.Signal;
-import org.apache.hadoop.yarn.server.nodemanager.containermanager.container.Container;
-import org.apache.hadoop.yarn.server.nodemanager.containermanager.localizer.ContainerLocalizer;
-import org.apache.hadoop.yarn.server.nodemanager.containermanager.localizer.ResourceLocalizationService;
-import org.apache.hadoop.yarn.server.nodemanager.executor.ContainerReacquisitionContext;
-import org.apache.hadoop.yarn.server.nodemanager.executor.ContainerSignalContext;
-import org.apache.hadoop.yarn.server.nodemanager.executor.ContainerStartContext;
-import org.apache.hadoop.yarn.server.nodemanager.executor.DeletionAsUserContext;
-import org.apache.hadoop.yarn.server.nodemanager.executor.LocalizerStartContext;
-import org.apache.hadoop.yarn.server.nodemanager.util.LCEResourcesHandler;
-import org.junit.After;
-import org.junit.Assert;
-import org.junit.Assume;
-import org.junit.Before;
-import org.junit.Test;
+import static org.apache.hadoop.fs.CreateFlag.CREATE;
+import static org.apache.hadoop.fs.CreateFlag.OVERWRITE;
+import static org.junit.Assert.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
 
 /**
  * This is intended to test the LinuxContainerExecutor code, but because of some
@@ -359,7 +327,7 @@ public class TestLinuxContainerExecutor {
     String locId = "container_01_01";
     Path nmPrivateContainerTokensPath =
         dirsHandler
-          .getLocalPathForWrite(ResourceLocalizationService.NM_PRIVATE_DIR
+          .getLocalPathForWrite(AbstractResourceLocalizationService.NM_PRIVATE_DIR
               + Path.SEPARATOR
               + String.format(ContainerExecutor.TOKEN_FILE_NAME_FMT, locId));
     files.create(nmPrivateContainerTokensPath, EnumSet.of(CREATE, OVERWRITE));
@@ -393,7 +361,7 @@ public class TestLinuxContainerExecutor {
     String locId2 = "container_01_02";
     Path nmPrivateContainerTokensPath2 =
         dirsHandler
-          .getLocalPathForWrite(ResourceLocalizationService.NM_PRIVATE_DIR
+          .getLocalPathForWrite(AbstractResourceLocalizationService.NM_PRIVATE_DIR
               + Path.SEPARATOR
               + String.format(ContainerExecutor.TOKEN_FILE_NAME_FMT, locId2));
     files.create(nmPrivateContainerTokensPath2, EnumSet.of(CREATE, OVERWRITE));

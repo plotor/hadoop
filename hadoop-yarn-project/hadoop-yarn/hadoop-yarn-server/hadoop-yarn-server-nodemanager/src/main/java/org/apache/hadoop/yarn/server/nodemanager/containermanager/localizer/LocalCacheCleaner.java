@@ -6,9 +6,9 @@
  * to you under the Apache License, Version 2.0 (the
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -18,15 +18,10 @@
 
 package org.apache.hadoop.yarn.server.nodemanager.containermanager.localizer;
 
-import java.io.Serializable;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.Iterator;
-import java.util.Map;
-import java.util.SortedMap;
-import java.util.TreeMap;
-
 import org.apache.hadoop.yarn.server.nodemanager.DeletionService;
+
+import java.io.Serializable;
+import java.util.*;
 
 /**
  * A class responsible for cleaning the PUBLIC and PRIVATE local caches on a
@@ -44,13 +39,13 @@ class LocalCacheCleaner {
   }
 
   LocalCacheCleaner(DeletionService delService, long targetSize,
-      Comparator<? super LocalizedResource> cmp) {
+                    Comparator<? super LocalizedResource> cmp) {
     this(delService, targetSize,
         new TreeMap<LocalizedResource, LocalResourcesTracker>(cmp));
   }
 
   LocalCacheCleaner(DeletionService delService, long targetSize,
-      SortedMap<LocalizedResource, LocalResourcesTracker> resourceMap) {
+                    SortedMap<LocalizedResource, LocalResourcesTracker> resourceMap) {
     this.resourceMap = resourceMap;
     this.delService = delService;
     this.targetSize = targetSize;
@@ -83,8 +78,8 @@ class LocalCacheCleaner {
   public LocalCacheCleanerStats cleanCache() {
     LocalCacheCleanerStats stats = new LocalCacheCleanerStats(currentSize);
     for (Iterator<Map.Entry<LocalizedResource, LocalResourcesTracker>> i =
-        resourceMap.entrySet().iterator();
-        currentSize - stats.totalDelSize > targetSize && i.hasNext();) {
+         resourceMap.entrySet().iterator();
+         currentSize - stats.totalDelSize > targetSize && i.hasNext(); ) {
       Map.Entry<LocalizedResource, LocalResourcesTracker> rsrc = i.next();
       LocalizedResource resource = rsrc.getKey();
       LocalResourcesTracker tracker = rsrc.getValue();

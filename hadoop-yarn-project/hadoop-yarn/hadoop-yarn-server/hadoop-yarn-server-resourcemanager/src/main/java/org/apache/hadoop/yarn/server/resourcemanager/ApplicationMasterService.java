@@ -1,34 +1,23 @@
 /**
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*     http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 package org.apache.hadoop.yarn.server.resourcemanager;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.net.InetSocketAddress;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.apache.hadoop.classification.InterfaceAudience.Private;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.CommonConfigurationKeysPublic;
@@ -37,6 +26,7 @@ import org.apache.hadoop.security.SaslRpcServer;
 import org.apache.hadoop.security.authorize.PolicyProvider;
 import org.apache.hadoop.security.token.Token;
 import org.apache.hadoop.service.AbstractService;
+import org.apache.hadoop.thirdparty.com.google.common.annotations.VisibleForTesting;
 import org.apache.hadoop.yarn.ams.ApplicationMasterServiceProcessor;
 import org.apache.hadoop.yarn.api.ApplicationMasterProtocol;
 import org.apache.hadoop.yarn.api.protocolrecords.AllocateRequest;
@@ -76,8 +66,17 @@ import org.apache.hadoop.yarn.server.resourcemanager.security.authorize.RMPolicy
 import org.apache.hadoop.yarn.server.security.MasterKeyData;
 import org.apache.hadoop.yarn.server.utils.YarnServerSecurityUtils;
 import org.apache.hadoop.yarn.util.resource.Resources;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import org.apache.hadoop.thirdparty.com.google.common.annotations.VisibleForTesting;
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.InetSocketAddress;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 @SuppressWarnings("unchecked")
 @Private
@@ -101,12 +100,12 @@ public class ApplicationMasterService extends AbstractService implements
   private boolean timelineServiceV2Enabled;
 
   public ApplicationMasterService(RMContext rmContext,
-      YarnScheduler scheduler) {
+                                  YarnScheduler scheduler) {
     this(ApplicationMasterService.class.getName(), rmContext, scheduler);
   }
 
   public ApplicationMasterService(String name, RMContext rmContext,
-      YarnScheduler scheduler) {
+                                  YarnScheduler scheduler) {
     super(name);
     this.amLivelinessMonitor = rmContext.getAMLivelinessMonitor();
     this.rScheduler = scheduler;
@@ -198,7 +197,7 @@ public class ApplicationMasterService extends AbstractService implements
 
     // Enable service authorization?
     if (conf.getBoolean(
-        CommonConfigurationKeysPublic.HADOOP_SECURITY_AUTHORIZATION, 
+        CommonConfigurationKeysPublic.HADOOP_SECURITY_AUTHORIZATION,
         false)) {
       InputStream inputStream =
           this.rmContext.getConfigurationProvider()
@@ -213,9 +212,9 @@ public class ApplicationMasterService extends AbstractService implements
     this.server.start();
     this.masterServiceAddress =
         conf.updateConnectAddr(YarnConfiguration.RM_BIND_HOST,
-                               YarnConfiguration.RM_SCHEDULER_ADDRESS,
-                               YarnConfiguration.DEFAULT_RM_SCHEDULER_ADDRESS,
-                               server.getListenerAddress());
+            YarnConfiguration.RM_SCHEDULER_ADDRESS,
+            YarnConfiguration.DEFAULT_RM_SCHEDULER_ADDRESS,
+            server.getListenerAddress());
     this.timelineServiceV2Enabled = YarnConfiguration.
         timelineServiceV2Enabled(conf);
 
@@ -223,7 +222,7 @@ public class ApplicationMasterService extends AbstractService implements
   }
 
   protected Server getServer(YarnRPC rpc, Configuration serverConf,
-      InetSocketAddress addr, AMRMTokenSecretManager secretManager) {
+                             InetSocketAddress addr, AMRMTokenSecretManager secretManager) {
     return rpc.getServer(ApplicationMasterProtocol.class, this, addr,
         serverConf, secretManager,
         serverConf.getInt(YarnConfiguration.RM_SCHEDULER_CLIENT_THREAD_COUNT,
@@ -361,7 +360,7 @@ public class ApplicationMasterService extends AbstractService implements
     LOG.error(message);
     throw new InvalidApplicationMasterRequestException(message);
   }
-  
+
   /**
    * @param appAttemptId
    * @return true if application is registered for the respective attemptid
@@ -444,7 +443,7 @@ public class ApplicationMasterService extends AbstractService implements
         RMApp app =
             this.rmContext.getRMApps().get(appAttemptId.getApplicationId());
         RMAppAttempt appAttempt = app.getRMAppAttempt(appAttemptId);
-        RMAppAttemptImpl appAttemptImpl = (RMAppAttemptImpl)appAttempt;
+        RMAppAttemptImpl appAttemptImpl = (RMAppAttemptImpl) appAttempt;
         Token<AMRMTokenIdentifier> amrmToken = appAttempt.getAMRMToken();
         if (nextMasterKey.getMasterKey().getKeyId() !=
             appAttemptImpl.getAMRMTokenKeyId()) {
@@ -478,14 +477,14 @@ public class ApplicationMasterService extends AbstractService implements
     // set response id to -1 before application master for the following
     // attemptID get registered
     response.setResponseId(AMRMClientUtils.PRE_REGISTER_RESPONSE_ID);
-    LOG.info("Registering app attempt : " + attemptId);
+    LOG.info("Registering app attempt: {}", attemptId);
     responseMap.put(attemptId, new AllocateResponseLock(response));
     rmContext.getNMTokenSecretManager().registerApplicationAttempt(attemptId);
   }
 
   @VisibleForTesting
   protected boolean setAttemptLastResponseId(ApplicationAttemptId attemptId,
-      int lastResponseId) {
+                                             int lastResponseId) {
     AllocateResponseLock lock = responseMap.get(attemptId);
     if (lock == null || lock.getAllocateResponse() == null) {
       return false;
@@ -501,12 +500,12 @@ public class ApplicationMasterService extends AbstractService implements
     rmContext.getNMTokenSecretManager().unregisterApplicationAttempt(attemptId);
   }
 
-  public void refreshServiceAcls(Configuration configuration, 
-      PolicyProvider policyProvider) {
+  public void refreshServiceAcls(Configuration configuration,
+                                 PolicyProvider policyProvider) {
     this.server.refreshServiceAclWithLoadedConfiguration(configuration,
         policyProvider);
   }
-  
+
   @Override
   protected void serviceStop() throws Exception {
     if (this.server != null) {
@@ -516,18 +515,18 @@ public class ApplicationMasterService extends AbstractService implements
     finishedAttemptCache.clear();
     super.serviceStop();
   }
-  
+
   public static class AllocateResponseLock {
     private AllocateResponse response;
-    
+
     public AllocateResponseLock(AllocateResponse response) {
       this.response = response;
     }
-    
+
     public synchronized AllocateResponse getAllocateResponse() {
       return response;
     }
-    
+
     public synchronized void setAllocateResponse(AllocateResponse response) {
       this.response = response;
     }

@@ -18,15 +18,15 @@
 
 package org.apache.hadoop.yarn.factories.impl.pb;
 
-import java.lang.reflect.Constructor;
-import java.lang.reflect.InvocationTargetException;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
-
 import org.apache.hadoop.classification.InterfaceAudience.Private;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.yarn.exceptions.YarnRuntimeException;
 import org.apache.hadoop.yarn.factories.RecordFactory;
+
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 @Private
 public class RecordFactoryPBImpl implements RecordFactory {
@@ -51,7 +51,7 @@ public class RecordFactoryPBImpl implements RecordFactory {
     
     Constructor<?> constructor = cache.get(clazz);
     if (constructor == null) {
-      Class<?> pbClazz = null;
+      Class<?> pbClazz;
       try {
         pbClazz = localConf.getClassByName(getPBImplClassName(clazz));
       } catch (ClassNotFoundException e) {

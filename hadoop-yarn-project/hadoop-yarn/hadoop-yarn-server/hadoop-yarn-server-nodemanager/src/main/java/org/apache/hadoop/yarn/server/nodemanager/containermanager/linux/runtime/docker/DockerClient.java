@@ -27,17 +27,12 @@ import org.apache.hadoop.util.StringUtils;
 import org.apache.hadoop.yarn.api.records.ApplicationId;
 import org.apache.hadoop.yarn.api.records.ContainerId;
 import org.apache.hadoop.yarn.server.nodemanager.Context;
-import org.apache.hadoop.yarn.server.nodemanager.containermanager.localizer.ResourceLocalizationService;
+import org.apache.hadoop.yarn.server.nodemanager.containermanager.localizer.AbstractResourceLocalizationService;
 import org.apache.hadoop.yarn.server.nodemanager.containermanager.runtime.ContainerExecutionException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.OutputStreamWriter;
-import java.io.PrintWriter;
-import java.io.Writer;
+import java.io.*;
 import java.util.List;
 import java.util.Map;
 
@@ -83,7 +78,7 @@ public final class DockerClient {
 
     try {
       String cmdDirPath = nmContext.getLocalDirsHandler().getLocalPathForWrite(
-          ResourceLocalizationService.NM_PRIVATE_DIR + Path.SEPARATOR +
+          AbstractResourceLocalizationService.NM_PRIVATE_DIR + Path.SEPARATOR +
           appId + Path.SEPARATOR + filePrefix + Path.SEPARATOR).toString();
       cmdDir = new File(cmdDirPath);
       if (!cmdDir.mkdirs() && !cmdDir.exists()) {

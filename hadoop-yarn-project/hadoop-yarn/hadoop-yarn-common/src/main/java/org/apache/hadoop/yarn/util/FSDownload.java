@@ -1,28 +1,46 @@
- /**
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*     http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
+/**
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 package org.apache.hadoop.yarn.util;
 
-import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
+import org.apache.commons.io.FileUtils;
+import org.apache.commons.io.IOUtils;
+import org.apache.hadoop.classification.InterfaceAudience.LimitedPrivate;
+import org.apache.hadoop.classification.InterfaceAudience.Private;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.*;
+import org.apache.hadoop.fs.Options.Rename;
+import org.apache.hadoop.fs.permission.FsAction;
+import org.apache.hadoop.fs.permission.FsPermission;
+import org.apache.hadoop.security.UserGroupInformation;
+import org.apache.hadoop.thirdparty.com.google.common.annotations.VisibleForTesting;
+import org.apache.hadoop.thirdparty.com.google.common.cache.CacheLoader;
+import org.apache.hadoop.thirdparty.com.google.common.cache.LoadingCache;
+import org.apache.hadoop.thirdparty.com.google.common.util.concurrent.Futures;
+import org.apache.hadoop.util.*;
+import org.apache.hadoop.yarn.api.records.LocalResource;
+import org.apache.hadoop.yarn.api.records.LocalResourceVisibility;
+import org.apache.hadoop.yarn.exceptions.YarnException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.*;
 import java.net.URISyntaxException;
 import java.security.PrivilegedExceptionAction;
 import java.util.concurrent.Callable;
@@ -30,82 +48,110 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.regex.Pattern;
 
-import org.apache.commons.io.FileUtils;
-import org.apache.commons.io.IOUtils;
-import org.apache.hadoop.util.Time;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.apache.hadoop.classification.InterfaceAudience.LimitedPrivate;
-import org.apache.hadoop.classification.InterfaceAudience.Private;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileContext;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.FileUtil;
-import org.apache.hadoop.fs.LocalFileSystem;
-import org.apache.hadoop.fs.Options.Rename;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.permission.FsAction;
-import org.apache.hadoop.fs.permission.FsPermission;
-import org.apache.hadoop.security.UserGroupInformation;
-import org.apache.hadoop.util.RunJar;
-import org.apache.hadoop.util.Shell;
-import org.apache.hadoop.util.StringUtils;
-import org.apache.hadoop.yarn.api.records.LocalResource;
-import org.apache.hadoop.yarn.api.records.LocalResourceVisibility;
-
-import org.apache.hadoop.thirdparty.com.google.common.annotations.VisibleForTesting;
-import org.apache.hadoop.thirdparty.com.google.common.cache.CacheLoader;
-import org.apache.hadoop.thirdparty.com.google.common.cache.LoadingCache;
-import org.apache.hadoop.thirdparty.com.google.common.util.concurrent.Futures;
-import org.apache.hadoop.yarn.exceptions.YarnException;
-
 import static org.apache.hadoop.fs.Options.OpenFileOptions.FS_OPTION_OPENFILE_READ_POLICY;
 import static org.apache.hadoop.fs.Options.OpenFileOptions.FS_OPTION_OPENFILE_READ_POLICY_WHOLE_FILE;
 import static org.apache.hadoop.util.functional.FutureIO.awaitFuture;
 
- /**
+/**
  * Download a single URL to the local disk.
- *
  */
 @LimitedPrivate({"YARN", "MapReduce"})
 public class FSDownload implements Callable<Path> {
 
-  private static final Logger LOG =
-      LoggerFactory.getLogger(FSDownload.class);
+  private static final Logger LOG = LoggerFactory.getLogger(FSDownload.class);
 
   private FileContext files;
   private final UserGroupInformation userUgi;
   private Configuration conf;
   private LocalResource resource;
-  private final LoadingCache<Path,Future<FileStatus>> statCache;
-  
-  /** The local FS dir path under which this resource is to be localized to */
+  private final LoadingCache<Path, Future<FileStatus>> statCache;
+
+  /**
+   * The local FS dir path under which this resource is to be localized to
+   */
   private Path destDirPath;
 
-  private static final FsPermission cachePerms = new FsPermission(
-      (short) 0755);
+  private static final FsPermission cachePerms = new FsPermission((short) 0755);
   static final FsPermission PUBLIC_FILE_PERMS = new FsPermission((short) 0555);
-  static final FsPermission PRIVATE_FILE_PERMS = new FsPermission(
-      (short) 0500);
+  static final FsPermission PRIVATE_FILE_PERMS = new FsPermission((short) 0500);
   static final FsPermission PUBLIC_DIR_PERMS = new FsPermission((short) 0755);
   static final FsPermission PRIVATE_DIR_PERMS = new FsPermission((short) 0700);
 
 
-  public FSDownload(FileContext files, UserGroupInformation ugi, Configuration conf,
-      Path destDirPath, LocalResource resource) {
+  public FSDownload(FileContext files,
+                    UserGroupInformation ugi,
+                    Configuration conf,
+                    Path destDirPath,
+                    LocalResource resource) {
     this(files, ugi, conf, destDirPath, resource, null);
   }
 
-  public FSDownload(FileContext files, UserGroupInformation ugi, Configuration conf,
-      Path destDirPath, LocalResource resource,
-      LoadingCache<Path,Future<FileStatus>> statCache) {
+  public FSDownload(FileContext files,
+                    UserGroupInformation ugi,
+                    Configuration conf,
+                    Path destDirPath,
+                    LocalResource resource,
+                    LoadingCache<Path, Future<FileStatus>> statCache) {
     this.conf = conf;
     this.destDirPath = destDirPath;
     this.files = files;
     this.userUgi = ugi;
     this.resource = resource;
     this.statCache = statCache;
+  }
+
+  @Override
+  public Path call() throws Exception {
+    final Path sCopy;
+    try {
+      sCopy = resource.getResource().toPath();
+    } catch (URISyntaxException e) {
+      throw new IOException("Invalid resource", e);
+    }
+
+    TimmingTracer ticker = new TimmingTracer();
+    LOG.debug("Starting to download {} {} {}",
+        sCopy, resource.getType(), resource.getPattern());
+
+    final Path destinationTmp = new Path(destDirPath + "_tmp");
+    createDir(destinationTmp, cachePerms);
+    Path dFinal = files.makeQualified(new Path(destinationTmp, sCopy.getName()));
+    try {
+      if (userUgi == null) {
+        verifyAndCopy(dFinal, ticker);
+      } else {
+        userUgi.doAs((PrivilegedExceptionAction<Void>) () -> {
+          verifyAndCopy(dFinal, ticker);
+          return null;
+        });
+      }
+      ticker.throwingRun(
+          "ChangePermissions",
+          () -> changePermissions(dFinal.getFileSystem(conf), dFinal)
+      );
+      ticker.throwingRun(
+          "RenameFile",
+          () -> files.rename(destinationTmp, destDirPath, Rename.OVERWRITE)
+      );
+
+      LOG.info("NEUTRON, File has been downloaded to {} from {}, size: {}, elapse: {}",
+          Path.getPathWithoutSchemeAndAuthority(new Path(destDirPath, sCopy.getName())), sCopy,
+          resource.getSize(), ticker);
+    } catch (Exception e) {
+      try {
+        files.delete(destDirPath, true);
+      } catch (IOException ignore) {
+      }
+      throw e;
+    } finally {
+      try {
+        files.delete(destinationTmp, true);
+      } catch (FileNotFoundException ignore) {
+      }
+      conf = null;
+      resource = null;
+    }
+    return files.makeQualified(new Path(destDirPath, sCopy.getName()));
   }
 
   LocalResource getResource() {
@@ -124,9 +170,10 @@ public class FSDownload implements Callable<Path> {
    * to create an instance of the status cache that is passed into the
    * FSDownload constructor.
    */
-  public static CacheLoader<Path,Future<FileStatus>>
-      createStatusCacheLoader(final Configuration conf) {
-    return new CacheLoader<Path,Future<FileStatus>>() {
+  public static CacheLoader<Path, Future<FileStatus>>
+  createStatusCacheLoader(final Configuration conf) {
+    return new CacheLoader<Path, Future<FileStatus>>() {
+      @Override
       public Future<FileStatus> load(Path path) {
         try {
           FileSystem fs = path.getFileSystem(conf);
@@ -148,7 +195,8 @@ public class FSDownload implements Callable<Path> {
    */
   @Private
   public static boolean isPublic(FileSystem fs, Path current, FileStatus sStat,
-      LoadingCache<Path,Future<FileStatus>> statCache) throws IOException {
+                                 LoadingCache<Path, Future<FileStatus>> statCache)
+      throws IOException {
     current = fs.makeQualified(current);
     //the leaf level file should be readable by others
     if (!checkPublicPermsForAll(fs, sStat, FsAction.READ_EXECUTE, FsAction.READ)) {
@@ -167,18 +215,18 @@ public class FSDownload implements Callable<Path> {
     return ancestorsHaveExecutePermissions(fs, current.getParent(), statCache);
   }
 
-  private static boolean checkPublicPermsForAll(FileSystem fs, 
-        FileStatus status, FsAction dir, FsAction file) 
-    throws IOException {
+  private static boolean checkPublicPermsForAll(FileSystem fs,
+                                                FileStatus status, FsAction dir, FsAction file)
+      throws IOException {
     FsPermission perms = status.getPermission();
     FsAction otherAction = perms.getOtherAction();
     if (status.isDirectory()) {
       if (!otherAction.implies(dir)) {
         return false;
       }
-      
+
       for (FileStatus child : fs.listStatus(status.getPath())) {
-        if(!checkPublicPermsForAll(fs, child, dir, file)) {
+        if (!checkPublicPermsForAll(fs, child, dir, file)) {
           return false;
         }
       }
@@ -194,7 +242,8 @@ public class FSDownload implements Callable<Path> {
    */
   @VisibleForTesting
   static boolean ancestorsHaveExecutePermissions(FileSystem fs,
-      Path path, LoadingCache<Path,Future<FileStatus>> statCache)
+                                                 Path path,
+                                                 LoadingCache<Path, Future<FileStatus>> statCache)
       throws IOException {
     Path current = path;
     while (current != null) {
@@ -208,8 +257,9 @@ public class FSDownload implements Callable<Path> {
   }
 
   /**
-   * Checks for a given path whether the Other permissions on it 
+   * Checks for a given path whether the Other permissions on it
    * imply the permission in the passed FsAction
+   *
    * @param fs
    * @param path
    * @param action
@@ -217,7 +267,8 @@ public class FSDownload implements Callable<Path> {
    * @throws IOException
    */
   private static boolean checkPermissionOfOther(FileSystem fs, Path path,
-      FsAction action, LoadingCache<Path,Future<FileStatus>> statCache)
+                                                FsAction action,
+                                                LoadingCache<Path, Future<FileStatus>> statCache)
       throws IOException {
     FileStatus status = getFileStatus(fs, path, statCache);
     FsPermission perms = status.getPermission();
@@ -229,12 +280,13 @@ public class FSDownload implements Callable<Path> {
    * Obtains the file status, first by checking the stat cache if it is
    * available, and then by getting it explicitly from the filesystem. If we got
    * the file status from the filesystem, it is added to the stat cache.
-   *
+   * <p>
    * The stat cache is expected to be managed by callers who provided it to
    * FSDownload.
    */
   private static FileStatus getFileStatus(final FileSystem fs, final Path path,
-      LoadingCache<Path,Future<FileStatus>> statCache) throws IOException {
+                                          LoadingCache<Path, Future<FileStatus>> statCache)
+      throws IOException {
     // if the stat cache does not exist, simply query the filesystem
     if (statCache == null) {
       return fs.getFileStatus(path);
@@ -247,7 +299,7 @@ public class FSDownload implements Callable<Path> {
       Throwable cause = e.getCause();
       // the underlying exception should normally be IOException
       if (cause instanceof IOException) {
-        throw (IOException)cause;
+        throw (IOException) cause;
       } else {
         throw new IOException(cause);
       }
@@ -259,11 +311,12 @@ public class FSDownload implements Callable<Path> {
 
   /**
    * Localize files.
+   *
    * @param destination destination directory
-   * @throws IOException cannot read or write file
+   * @throws IOException   cannot read or write file
    * @throws YarnException subcommand returned an error
    */
-  private void verifyAndCopy(Path destination)
+  private void verifyAndCopy(Path destination, final TimmingTracer ticker)
       throws IOException, YarnException {
     final Path sCopy;
     try {
@@ -271,8 +324,10 @@ public class FSDownload implements Callable<Path> {
     } catch (URISyntaxException e) {
       throw new IOException("Invalid resource", e);
     }
-    FileSystem sourceFs = sCopy.getFileSystem(conf);
-    FileStatus sStat = sourceFs.getFileStatus(sCopy);
+    FileSystem sourceFs = ticker.throwingRun(
+        "GetFileSystem", () -> sCopy.getFileSystem(conf, ticker));
+    FileStatus sStat = ticker.throwingRun(
+        "GetFileStatus", () -> sourceFs.getFileStatus(sCopy));
     if (sStat.getModificationTime() != resource.getTimestamp()) {
       throw new IOException("Resource " + sCopy + " changed on src filesystem" +
           " - expected: " +
@@ -284,34 +339,47 @@ public class FSDownload implements Callable<Path> {
     if (resource.getVisibility() == LocalResourceVisibility.PUBLIC) {
       if (!isPublic(sourceFs, sCopy, sStat, statCache)) {
         throw new IOException("Resource " + sCopy +
-            " is not publicly accessible and as such cannot be part of the" +
-            " public cache.");
+            " is not publicly accessible and as such cannot be part of the public cache.");
       }
     }
 
-    downloadAndUnpack(sCopy, sStat, destination);
+    ticker.throwingRun(
+        "DownloadAndUnpack",
+        () -> downloadAndUnpack(sCopy, sStat, destination, ticker)
+    );
   }
 
   /**
    * Copy source path to destination with localization rules.
-   * @param source source path to copy. Typically HDFS or an object store.
+   *
+   * @param source       source path to copy. Typically HDFS or an object store.
    * @param sourceStatus status of source
-   * @param destination destination path. Typically local filesystem
-   * @exception YarnException Any error has occurred
+   * @param destination  destination path. Typically local filesystem
+   * @throws YarnException Any error has occurred
    */
   private void downloadAndUnpack(Path source,
-      FileStatus sourceStatus,  Path destination)
-      throws YarnException {
+                                 FileStatus sourceStatus,
+                                 Path destination,
+                                 TimmingTracer ticker) throws YarnException {
     try {
       FileSystem sourceFileSystem = source.getFileSystem(conf);
       FileSystem destinationFileSystem = destination.getFileSystem(conf);
+      LOG.info("Download and unpack file: {}, isDir: {}", source, sourceStatus.isDirectory());
       if (sourceStatus.isDirectory()) {
-        FileUtil.copy(
-            sourceFileSystem, sourceStatus,
-            destinationFileSystem, destination, false,
-            true, conf);
+        ticker.throwingRun(
+            "CopyFile",
+            () -> FileUtil.copy(
+                sourceFileSystem,
+                sourceStatus,
+                destinationFileSystem,
+                destination,
+                false,
+                true,
+                conf));
       } else {
-        unpack(source, destination, sourceFileSystem, destinationFileSystem);
+        ticker.throwingRun(
+            "UnpackFile",
+            () -> unpack(source, destination, sourceFileSystem, destinationFileSystem));
       }
     } catch (Exception e) {
       throw new YarnException("Download and unpack failed", e);
@@ -322,13 +390,14 @@ public class FSDownload implements Callable<Path> {
    * Do the localization action on the input stream.
    * We use the deprecated method RunJar.unJarAndSave for compatibility reasons.
    * We should use the more efficient RunJar.unJar in the future.
-   * @param source Source path
-   * @param destination Destination pth
-   * @param sourceFileSystem Source filesystem
+   *
+   * @param source                Source path
+   * @param destination           Destination pth
+   * @param sourceFileSystem      Source filesystem
    * @param destinationFileSystem Destination filesystem
-   * @throws IOException Could not read or write stream
+   * @throws IOException          Could not read or write stream
    * @throws InterruptedException Operation interrupted by caller
-   * @throws ExecutionException Could not create thread pool execution
+   * @throws ExecutionException   Could not create thread pool execution
    */
   @SuppressWarnings("deprecation")
   private void unpack(Path source, Path destination,
@@ -337,8 +406,7 @@ public class FSDownload implements Callable<Path> {
       throws IOException, InterruptedException, ExecutionException {
     try (InputStream inputStream = awaitFuture(
         sourceFileSystem.openFile(source)
-            .opt(FS_OPTION_OPENFILE_READ_POLICY,
-                FS_OPTION_OPENFILE_READ_POLICY_WHOLE_FILE)
+            .opt(FS_OPTION_OPENFILE_READ_POLICY, FS_OPTION_OPENFILE_READ_POLICY_WHOLE_FILE)
             .build())) {
       File dst = new File(destination.toUri());
       String lowerDst = StringUtils.toLowerCase(dst.getName());
@@ -348,14 +416,13 @@ public class FSDownload implements Callable<Path> {
           RunJar.unJar(inputStream, dst, RunJar.MATCH_ANY);
         } else if (lowerDst.endsWith(".zip")) {
           FileUtil.unZip(inputStream, dst);
-        } else if (lowerDst.endsWith(".tar.gz") ||
-            lowerDst.endsWith(".tgz") ||
-            lowerDst.endsWith(".tar")) {
+        } else if (lowerDst.endsWith(".tar.gz")
+            || lowerDst.endsWith(".tgz")
+            || lowerDst.endsWith(".tar")) {
           FileUtil.unTar(inputStream, dst, lowerDst.endsWith("gz"));
         } else {
           LOG.warn("Cannot unpack " + source);
-          try (OutputStream outputStream =
-                   destinationFileSystem.create(destination, true)) {
+          try (OutputStream outputStream = destinationFileSystem.create(destination, true)) {
             IOUtils.copy(inputStream, outputStream);
           }
         }
@@ -369,27 +436,25 @@ public class FSDownload implements Callable<Path> {
           RunJar.unJarAndSave(inputStream, dst, source.getName(),
               p == null ? RunJar.MATCH_ANY : Pattern.compile(p));
         } else if (lowerDst.endsWith(".zip")) {
-          LOG.warn("Treating [" + source + "] as an archive even though it " +
-              "was specified as PATTERN");
+          LOG.warn(
+              "Treating [" + source + "] as an archive even though it was specified as PATTERN");
           FileUtil.unZip(inputStream, dst);
-        } else if (lowerDst.endsWith(".tar.gz") ||
-            lowerDst.endsWith(".tgz") ||
-            lowerDst.endsWith(".tar")) {
-          LOG.warn("Treating [" + source + "] as an archive even though it " +
-              "was specified as PATTERN");
+        } else if (lowerDst.endsWith(".tar.gz")
+            || lowerDst.endsWith(".tgz")
+            || lowerDst.endsWith(".tar")) {
+          LOG.warn(
+              "Treating [" + source + "] as an archive even though it was specified as PATTERN");
           FileUtil.unTar(inputStream, dst, lowerDst.endsWith("gz"));
         } else {
           LOG.warn("Cannot unpack " + source);
-          try (OutputStream outputStream =
-                   destinationFileSystem.create(destination, true)) {
+          try (OutputStream outputStream = destinationFileSystem.create(destination, true)) {
             IOUtils.copy(inputStream, outputStream);
           }
         }
         break;
       case FILE:
       default:
-        try (OutputStream outputStream =
-                 destinationFileSystem.create(destination, true)) {
+        try (OutputStream outputStream = destinationFileSystem.create(destination, true)) {
           IOUtils.copy(inputStream, outputStream);
         }
         break;
@@ -399,64 +464,15 @@ public class FSDownload implements Callable<Path> {
     }
   }
 
-  @Override
-  public Path call() throws Exception {
-    final Path sCopy;
-    try {
-      sCopy = resource.getResource().toPath();
-    } catch (URISyntaxException e) {
-      throw new IOException("Invalid resource", e);
-    }
-
-    LOG.debug("Starting to download {} {} {}", sCopy,
-        resource.getType(), resource.getPattern());
-
-    final Path destinationTmp = new Path(destDirPath + "_tmp");
-    createDir(destinationTmp, cachePerms);
-    Path dFinal =
-        files.makeQualified(new Path(destinationTmp, sCopy.getName()));
-    try {
-      if (userUgi == null) {
-        verifyAndCopy(dFinal);
-      } else {
-        userUgi.doAs(new PrivilegedExceptionAction<Void>() {
-          @Override
-          public Void run() throws Exception {
-            verifyAndCopy(dFinal);
-            return null;
-          }
-        });
-      }
-      changePermissions(dFinal.getFileSystem(conf), dFinal);
-      files.rename(destinationTmp, destDirPath, Rename.OVERWRITE);
-
-      LOG.debug("File has been downloaded to {} from {}",
-          new Path(destDirPath, sCopy.getName()), sCopy);
-    } catch (Exception e) {
-      try {
-        files.delete(destDirPath, true);
-      } catch (IOException ignore) {
-      }
-      throw e;
-    } finally {
-      try {
-        files.delete(destinationTmp, true);
-      } catch (FileNotFoundException ignore) {
-      }
-      conf = null;
-      resource = null;
-    }
-    return files.makeQualified(new Path(destDirPath, sCopy.getName()));
-  }
-
   /**
-   * Recursively change permissions of all files/dirs on path based 
+   * Recursively change permissions of all files/dirs on path based
    * on resource visibility.
    * Change to 755 or 700 for dirs, 555 or 500 for files.
-   * @param fs FileSystem
+   *
+   * @param fs   FileSystem
    * @param path Path to modify perms for
    * @throws IOException
-   * @throws InterruptedException 
+   * @throws InterruptedException
    */
   private void changePermissions(FileSystem fs, final Path path)
       throws IOException, InterruptedException {
@@ -483,13 +499,10 @@ public class FSDownload implements Callable<Path> {
     final FsPermission fPerm = perm;
     if (null == userUgi) {
       files.setPermission(path, perm);
-    }
-    else {
-      userUgi.doAs(new PrivilegedExceptionAction<Void>() {
-        public Void run() throws Exception {
-          files.setPermission(path, fPerm);
-          return null;
-        }
+    } else {
+      userUgi.doAs((PrivilegedExceptionAction<Void>) () -> {
+        files.setPermission(path, fPerm);
+        return null;
       });
     }
     if (isDir) {

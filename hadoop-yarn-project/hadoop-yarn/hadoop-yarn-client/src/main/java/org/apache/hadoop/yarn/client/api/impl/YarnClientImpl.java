@@ -1,34 +1,22 @@
 /**
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*     http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 package org.apache.hadoop.yarn.client.api.impl;
-
-import java.io.IOException;
-import java.net.URI;
-import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.EnumSet;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.Future;
 
 import org.apache.hadoop.classification.InterfaceAudience.Private;
 import org.apache.hadoop.classification.InterfaceStability.Unstable;
@@ -41,6 +29,7 @@ import org.apache.hadoop.security.Credentials;
 import org.apache.hadoop.security.SecurityUtil;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.security.token.TokenIdentifier;
+import org.apache.hadoop.thirdparty.com.google.common.annotations.VisibleForTesting;
 import org.apache.hadoop.yarn.api.ApplicationClientProtocol;
 import org.apache.hadoop.yarn.api.protocolrecords.FailApplicationAttemptRequest;
 import org.apache.hadoop.yarn.api.protocolrecords.GetAllResourceProfilesRequest;
@@ -101,8 +90,8 @@ import org.apache.hadoop.yarn.api.records.ContainerId;
 import org.apache.hadoop.yarn.api.records.ContainerLaunchContext;
 import org.apache.hadoop.yarn.api.records.ContainerReport;
 import org.apache.hadoop.yarn.api.records.NodeAttribute;
-import org.apache.hadoop.yarn.api.records.NodeAttributeKey;
 import org.apache.hadoop.yarn.api.records.NodeAttributeInfo;
+import org.apache.hadoop.yarn.api.records.NodeAttributeKey;
 import org.apache.hadoop.yarn.api.records.NodeId;
 import org.apache.hadoop.yarn.api.records.NodeLabel;
 import org.apache.hadoop.yarn.api.records.NodeReport;
@@ -141,17 +130,27 @@ import org.eclipse.jetty.websocket.api.Session;
 import org.eclipse.jetty.websocket.api.WebSocketException;
 import org.eclipse.jetty.websocket.client.ClientUpgradeRequest;
 import org.eclipse.jetty.websocket.client.WebSocketClient;
-
-import org.apache.hadoop.thirdparty.com.google.common.annotations.VisibleForTesting;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
+import java.net.URI;
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.EnumSet;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.Future;
 
 @Private
 @Unstable
 public class YarnClientImpl extends YarnClient {
 
   private static final Logger LOG = LoggerFactory
-          .getLogger(YarnClientImpl.class);
+      .getLogger(YarnClientImpl.class);
 
   protected ApplicationClientProtocol rmClient;
   protected long submitPollIntervalMillis;
@@ -180,18 +179,21 @@ public class YarnClientImpl extends YarnClient {
   @SuppressWarnings("deprecation")
   @Override
   protected void serviceInit(Configuration conf) throws Exception {
+    // 默认 200ms
     asyncApiPollIntervalMillis =
         conf.getLong(YarnConfiguration.YARN_CLIENT_APPLICATION_CLIENT_PROTOCOL_POLL_INTERVAL_MS,
-          YarnConfiguration.DEFAULT_YARN_CLIENT_APPLICATION_CLIENT_PROTOCOL_POLL_INTERVAL_MS);
+            YarnConfiguration.DEFAULT_YARN_CLIENT_APPLICATION_CLIENT_PROTOCOL_POLL_INTERVAL_MS);
+    // 客户端等待作业执行结束的超时时间，默认 -1，表示不超时
     asyncApiPollTimeoutMillis =
         conf.getLong(YarnConfiguration.YARN_CLIENT_APPLICATION_CLIENT_PROTOCOL_POLL_TIMEOUT_MS,
             YarnConfiguration.DEFAULT_YARN_CLIENT_APPLICATION_CLIENT_PROTOCOL_POLL_TIMEOUT_MS);
+    // 默认 200ms，表示请求 RM 获取 App 状态的时间间隔
     submitPollIntervalMillis = asyncApiPollIntervalMillis;
     if (conf.get(YarnConfiguration.YARN_CLIENT_APP_SUBMISSION_POLL_INTERVAL_MS)
         != null) {
       submitPollIntervalMillis = conf.getLong(
-        YarnConfiguration.YARN_CLIENT_APP_SUBMISSION_POLL_INTERVAL_MS,
-        YarnConfiguration.DEFAULT_YARN_CLIENT_APPLICATION_CLIENT_PROTOCOL_POLL_INTERVAL_MS);
+          YarnConfiguration.YARN_CLIENT_APP_SUBMISSION_POLL_INTERVAL_MS,
+          YarnConfiguration.DEFAULT_YARN_CLIENT_APPLICATION_CLIENT_PROTOCOL_POLL_INTERVAL_MS);
     }
 
     if (YarnConfiguration.timelineServiceV1Enabled(conf)) {
@@ -279,6 +281,7 @@ public class YarnClientImpl extends YarnClient {
 
   private GetNewApplicationResponse getNewApplication()
       throws YarnException, IOException {
+    // 采用 GetNewApplicationRequestPBImpl 实例化
     GetNewApplicationRequest request =
         Records.newRecord(GetNewApplicationRequest.class);
     return rmClient.getNewApplication(request);
@@ -287,8 +290,9 @@ public class YarnClientImpl extends YarnClient {
   @Override
   public YarnClientApplication createApplication()
       throws YarnException, IOException {
-    ApplicationSubmissionContext context = Records.newRecord
-        (ApplicationSubmissionContext.class);
+    // 创建 ApplicationSubmissionContext 对象
+    ApplicationSubmissionContext context = Records.newRecord(ApplicationSubmissionContext.class);
+    // 创建并向 RM 发送 GetNewApplicationRequest 请求
     GetNewApplicationResponse newApp = getNewApplication();
     ApplicationId appId = newApp.getApplicationId();
     context.setApplicationId(appId);
@@ -296,16 +300,15 @@ public class YarnClientImpl extends YarnClient {
   }
 
   @Override
-  public ApplicationId
-      submitApplication(ApplicationSubmissionContext appContext)
-          throws YarnException, IOException {
+  public ApplicationId submitApplication(ApplicationSubmissionContext appContext)
+      throws YarnException, IOException {
     ApplicationId applicationId = appContext.getApplicationId();
     if (applicationId == null) {
       throw new ApplicationIdNotProvidedException(
           "ApplicationId is not provided in ApplicationSubmissionContext");
     }
-    SubmitApplicationRequest request =
-        Records.newRecord(SubmitApplicationRequest.class);
+    // 构造 SubmitApplicationRequest 请求
+    SubmitApplicationRequest request = Records.newRecord(SubmitApplicationRequest.class);
     request.setApplicationSubmissionContext(appContext);
 
     // Automatically add the timeline DT into the CLC
@@ -314,25 +317,26 @@ public class YarnClientImpl extends YarnClient {
       addTimelineDelegationToken(appContext.getAMContainerSpec());
     }
 
+    // 向 RM 发送 SubmitApplicationRequest 请求
     //TODO: YARN-1763:Handle RM failovers during the submitApplication call.
     rmClient.submitApplication(request);
 
     int pollCount = 0;
     long startTime = System.currentTimeMillis();
-    EnumSet<YarnApplicationState> waitingStates = 
-                                 EnumSet.of(YarnApplicationState.NEW,
-                                 YarnApplicationState.NEW_SAVING,
-                                 YarnApplicationState.SUBMITTED);
-    EnumSet<YarnApplicationState> failToSubmitStates = 
-                                  EnumSet.of(YarnApplicationState.FAILED,
-                                  YarnApplicationState.KILLED);		
+    EnumSet<YarnApplicationState> waitingStates = EnumSet.of(
+        YarnApplicationState.NEW,
+        YarnApplicationState.NEW_SAVING,
+        YarnApplicationState.SUBMITTED);
+    EnumSet<YarnApplicationState> failToSubmitStates =
+        EnumSet.of(YarnApplicationState.FAILED, YarnApplicationState.KILLED);
     while (true) {
       try {
+        // 构造并向 RM 发送 GetApplicationReportRequest 请求
         ApplicationReport appReport = getApplicationReport(applicationId);
         YarnApplicationState state = appReport.getYarnApplicationState();
         if (!waitingStates.contains(state)) {
-          if(failToSubmitStates.contains(state)) {
-            throw new YarnException("Failed to submit " + applicationId + 
+          if (failToSubmitStates.contains(state)) {
+            throw new YarnException("Failed to submit " + applicationId +
                 " to YARN : " + appReport.getDiagnostics());
           }
           LOG.info("Submitted application " + applicationId);
@@ -340,8 +344,8 @@ public class YarnClientImpl extends YarnClient {
         }
 
         long elapsedMillis = System.currentTimeMillis() - startTime;
-        if (enforceAsyncAPITimeout() &&
-            elapsedMillis >= asyncApiPollTimeoutMillis) {
+        // 默认不超时
+        if (enforceAsyncAPITimeout() && elapsedMillis >= asyncApiPollTimeoutMillis) {
           throw new YarnException("Timed out while waiting for application " +
               applicationId + " to be submitted successfully");
         }
@@ -350,10 +354,10 @@ public class YarnClientImpl extends YarnClient {
         // is blocked here too long.
         if (++pollCount % 10 == 0) {
           LOG.info("Application submission is not finished, " +
-              "submitted application " + applicationId +
-              " is still in " + state);
+              "submitted application " + applicationId + " is still in " + state);
         }
         try {
+          // 默认 200ms
           Thread.sleep(submitPollIntervalMillis);
         } catch (InterruptedException ie) {
           String msg = "Interrupted while waiting for application "
@@ -407,7 +411,7 @@ public class YarnClientImpl extends YarnClient {
 
   @VisibleForTesting
   org.apache.hadoop.security.token.Token<TimelineDelegationTokenIdentifier>
-      getTimelineDelegationToken() throws IOException, YarnException {
+  getTimelineDelegationToken() throws IOException, YarnException {
     try {
       // Only reachable when both security and timeline service are enabled.
       if (timelineClient == null) {
@@ -445,7 +449,7 @@ public class YarnClientImpl extends YarnClient {
   }
 
   private static String getTimelineDelegationTokenRenewer(Configuration conf)
-      throws IOException, YarnException  {
+      throws IOException, YarnException {
     // Parse the RM daemon user if it exists in the config
     String rmPrincipal = conf.get(YarnConfiguration.RM_PRINCIPAL);
     String renewer = null;
@@ -534,7 +538,7 @@ public class YarnClientImpl extends YarnClient {
   @Override
   public ApplicationReport getApplicationReport(ApplicationId appId)
       throws YarnException, IOException {
-    GetApplicationReportResponse response = null;
+    GetApplicationReportResponse response;
     try {
       GetApplicationReportRequest request = Records
           .newRecord(GetApplicationReportRequest.class);
@@ -559,7 +563,7 @@ public class YarnClientImpl extends YarnClient {
   }
 
   public org.apache.hadoop.security.token.Token<AMRMTokenIdentifier>
-      getAMRMToken(ApplicationId appId) throws YarnException, IOException {
+  getAMRMToken(ApplicationId appId) throws YarnException, IOException {
     Token token = getApplicationReport(appId).getAMRMToken();
     org.apache.hadoop.security.token.Token<AMRMTokenIdentifier> amrmToken =
         null;
@@ -591,7 +595,8 @@ public class YarnClientImpl extends YarnClient {
 
   @Override
   public List<ApplicationReport> getApplications(Set<String> applicationTypes,
-      EnumSet<YarnApplicationState> applicationStates) throws YarnException,
+                                                 EnumSet<YarnApplicationState> applicationStates)
+      throws YarnException,
       IOException {
     GetApplicationsRequest request =
         GetApplicationsRequest.newInstance(applicationTypes, applicationStates);
@@ -601,8 +606,9 @@ public class YarnClientImpl extends YarnClient {
 
   @Override
   public List<ApplicationReport> getApplications(Set<String> applicationTypes,
-      EnumSet<YarnApplicationState> applicationStates,
-      Set<String> applicationTags) throws YarnException, IOException {
+                                                 EnumSet<YarnApplicationState> applicationStates,
+                                                 Set<String> applicationTags)
+      throws YarnException, IOException {
     GetApplicationsRequest request =
         GetApplicationsRequest.newInstance(applicationTypes, applicationStates);
     request.setApplicationTags(applicationTags);
@@ -612,8 +618,9 @@ public class YarnClientImpl extends YarnClient {
 
   @Override
   public List<ApplicationReport> getApplications(Set<String> queues,
-      Set<String> users, Set<String> applicationTypes,
-      EnumSet<YarnApplicationState> applicationStates) throws YarnException,
+                                                 Set<String> users, Set<String> applicationTypes,
+                                                 EnumSet<YarnApplicationState> applicationStates)
+      throws YarnException,
       IOException {
     GetApplicationsRequest request =
         GetApplicationsRequest.newInstance(applicationTypes, applicationStates);
@@ -667,8 +674,8 @@ public class YarnClientImpl extends YarnClient {
 
 
   private GetQueueInfoRequest
-      getQueueInfoRequest(String queueName, boolean includeApplications,
-          boolean includeChildQueues, boolean recursive) {
+  getQueueInfoRequest(String queueName, boolean includeApplications,
+                      boolean includeChildQueues, boolean recursive) {
     GetQueueInfoRequest request = Records.newRecord(GetQueueInfoRequest.class);
     request.setQueueName(queueName);
     request.setIncludeApplications(includeApplications);
@@ -701,7 +708,7 @@ public class YarnClientImpl extends YarnClient {
 
     QueueInfo rootQueue =
         rmClient.getQueueInfo(getQueueInfoRequest(ROOT, false, true, true))
-          .getQueueInfo();
+            .getQueueInfo();
     getChildQueues(rootQueue, queues, true);
     return queues;
   }
@@ -713,7 +720,7 @@ public class YarnClientImpl extends YarnClient {
 
     QueueInfo rootQueue =
         rmClient.getQueueInfo(getQueueInfoRequest(ROOT, false, true, true))
-          .getQueueInfo();
+            .getQueueInfo();
     getChildQueues(rootQueue, queues, false);
     return queues;
   }
@@ -725,13 +732,13 @@ public class YarnClientImpl extends YarnClient {
 
     QueueInfo parentQueue =
         rmClient.getQueueInfo(getQueueInfoRequest(parent, false, true, false))
-          .getQueueInfo();
+            .getQueueInfo();
     getChildQueues(parentQueue, queues, true);
     return queues;
   }
 
   private void getChildQueues(QueueInfo parent, List<QueueInfo> queues,
-      boolean recursive) {
+                              boolean recursive) {
     List<QueueInfo> childQueues = parent.getChildQueues();
 
     for (QueueInfo child : childQueues) {
@@ -902,7 +909,7 @@ public class YarnClientImpl extends YarnClient {
 
       if (containerIdsToBeKeptFromAHS.size() > 0
           && containersListFromAHS.size() != containerIdsToBeKeptFromAHS
-              .size()) {
+          .size()) {
         Iterator<ContainerReport> containersFromHS =
             containersListFromAHS.iterator();
         while (containersFromHS.hasNext()) {
@@ -944,7 +951,7 @@ public class YarnClientImpl extends YarnClient {
 
   @Override
   public void moveApplicationAcrossQueues(ApplicationId appId,
-      String queue) throws YarnException, IOException {
+                                          String queue) throws YarnException, IOException {
     MoveApplicationAcrossQueuesRequest request =
         MoveApplicationAcrossQueuesRequest.newInstance(appId, queue);
     rmClient.moveApplicationAcrossQueues(request);
@@ -978,7 +985,7 @@ public class YarnClientImpl extends YarnClient {
 
   @Override
   public ReservationListResponse listReservations(
-          ReservationListRequest request) throws YarnException, IOException {
+      ReservationListRequest request) throws YarnException, IOException {
     return rmClient.listReservations(request);
   }
 
@@ -1011,7 +1018,7 @@ public class YarnClientImpl extends YarnClient {
 
   @Override
   public Priority updateApplicationPriority(ApplicationId applicationId,
-      Priority priority) throws YarnException, IOException {
+                                            Priority priority) throws YarnException, IOException {
     UpdateApplicationPriorityRequest request =
         UpdateApplicationPriorityRequest.newInstance(applicationId, priority);
     return rmClient.updateApplicationPriority(request).getApplicationPriority();
@@ -1019,8 +1026,8 @@ public class YarnClientImpl extends YarnClient {
 
   @Override
   public void signalToContainer(ContainerId containerId,
-      SignalContainerCommand command)
-          throws YarnException, IOException {
+                                SignalContainerCommand command)
+      throws YarnException, IOException {
     LOG.info("Signalling container " + containerId + " with command " + command);
     SignalContainerRequest request =
         SignalContainerRequest.newInstance(containerId, command);
@@ -1084,7 +1091,7 @@ public class YarnClientImpl extends YarnClient {
 
   @Override
   public void shellToContainer(ContainerId containerId,
-      ShellContainerCommand command) throws IOException {
+                               ShellContainerCommand command) throws IOException {
     try {
       GetContainerReportRequest request = Records
           .newRecord(GetContainerReportRequest.class);

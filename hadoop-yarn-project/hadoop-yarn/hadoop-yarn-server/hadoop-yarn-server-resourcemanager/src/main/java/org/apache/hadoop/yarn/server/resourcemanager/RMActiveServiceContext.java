@@ -18,12 +18,6 @@
 
 package org.apache.hadoop.yarn.server.resourcemanager;
 
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.atomic.AtomicLong;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.apache.hadoop.classification.InterfaceAudience.Private;
 import org.apache.hadoop.classification.InterfaceStability.Unstable;
 import org.apache.hadoop.yarn.api.records.ApplicationId;
@@ -60,6 +54,12 @@ import org.apache.hadoop.yarn.server.resourcemanager.security.RMDelegationTokenS
 import org.apache.hadoop.yarn.server.resourcemanager.volume.csi.VolumeManager;
 import org.apache.hadoop.yarn.util.Clock;
 import org.apache.hadoop.yarn.util.SystemClock;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * The RMActiveServiceContext is the class that maintains <b>Active</b> service
@@ -73,8 +73,8 @@ public class RMActiveServiceContext {
   private static final Logger LOG = LoggerFactory
       .getLogger(RMActiveServiceContext.class);
 
-  private final ConcurrentMap<ApplicationId, RMApp> applications =
-      new ConcurrentHashMap<ApplicationId, RMApp>();
+  // 记录 applicationId 到 Application 的映射关系
+  private final ConcurrentMap<ApplicationId, RMApp> applications = new ConcurrentHashMap<>();
 
   private final ConcurrentMap<NodeId, RMNode> nodes =
       new ConcurrentHashMap<NodeId, RMNode>();

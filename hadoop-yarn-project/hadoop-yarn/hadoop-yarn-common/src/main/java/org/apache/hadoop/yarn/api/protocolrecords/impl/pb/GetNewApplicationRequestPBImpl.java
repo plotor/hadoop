@@ -29,6 +29,7 @@ import org.apache.hadoop.thirdparty.protobuf.TextFormat;
 @Private
 @Unstable
 public class GetNewApplicationRequestPBImpl extends GetNewApplicationRequest {
+
   GetNewApplicationRequestProto proto = GetNewApplicationRequestProto.getDefaultInstance();
   GetNewApplicationRequestProto.Builder builder = null;
   boolean viaProto = false;

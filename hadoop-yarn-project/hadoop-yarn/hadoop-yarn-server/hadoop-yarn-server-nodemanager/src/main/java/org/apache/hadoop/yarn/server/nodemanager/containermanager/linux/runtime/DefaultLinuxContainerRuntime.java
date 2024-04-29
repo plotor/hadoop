@@ -33,7 +33,7 @@ import org.apache.hadoop.yarn.server.nodemanager.containermanager.container.Cont
 import org.apache.hadoop.yarn.server.nodemanager.containermanager.linux.privileged.PrivilegedOperation;
 import org.apache.hadoop.yarn.server.nodemanager.containermanager.linux.privileged.PrivilegedOperationException;
 import org.apache.hadoop.yarn.server.nodemanager.containermanager.linux.privileged.PrivilegedOperationExecutor;
-import org.apache.hadoop.yarn.server.nodemanager.containermanager.localizer.ResourceLocalizationService;
+import org.apache.hadoop.yarn.server.nodemanager.containermanager.localizer.AbstractResourceLocalizationService;
 import org.apache.hadoop.yarn.server.nodemanager.containermanager.runtime.ContainerExecutionException;
 import org.apache.hadoop.yarn.server.nodemanager.containermanager.runtime.ContainerRuntime;
 import org.apache.hadoop.yarn.server.nodemanager.containermanager.runtime.ContainerRuntimeConstants;
@@ -42,12 +42,7 @@ import org.apache.hadoop.yarn.server.nodemanager.executor.ContainerExecContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.OutputStreamWriter;
-import java.io.PrintWriter;
-import java.io.Writer;
+import java.io.*;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -247,7 +242,7 @@ public class DefaultLinuxContainerRuntime implements LinuxContainerRuntime {
     String filePrefix = containerId.toString();
     try {
       String cmdDirPath = ctx.getLocalDirsHandlerService().getLocalPathForWrite(
-          ResourceLocalizationService.NM_PRIVATE_DIR + Path.SEPARATOR +
+          AbstractResourceLocalizationService.NM_PRIVATE_DIR + Path.SEPARATOR +
           appId + Path.SEPARATOR + filePrefix + Path.SEPARATOR).toString();
       cmdDir = new File(cmdDirPath);
       if (!cmdDir.mkdirs() && !cmdDir.exists()) {

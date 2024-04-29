@@ -6,9 +6,9 @@
  * to you under the Apache License, Version 2.0 (the
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -18,14 +18,7 @@
 
 package org.apache.hadoop.yarn.server.resourcemanager;
 
-import org.apache.hadoop.thirdparty.com.google.common.annotations.VisibleForTesting;
 import com.sun.jersey.spi.container.servlet.ServletContainer;
-
-import org.apache.hadoop.yarn.metrics.GenericEventTypeMetrics;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.slf4j.Marker;
-import org.slf4j.MarkerFactory;
 import org.apache.curator.framework.AuthInfo;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.hadoop.classification.InterfaceAudience.Private;
@@ -43,6 +36,7 @@ import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.security.authorize.ProxyUsers;
 import org.apache.hadoop.service.CompositeService;
 import org.apache.hadoop.service.Service;
+import org.apache.hadoop.thirdparty.com.google.common.annotations.VisibleForTesting;
 import org.apache.hadoop.util.ExitUtil;
 import org.apache.hadoop.util.GenericOptionsParser;
 import org.apache.hadoop.util.JvmPauseMonitor;
@@ -50,8 +44,8 @@ import org.apache.hadoop.util.ReflectionUtils;
 import org.apache.hadoop.util.ShutdownHookManager;
 import org.apache.hadoop.util.StringUtils;
 import org.apache.hadoop.util.Time;
-import org.apache.hadoop.util.curator.ZKCuratorManager;
 import org.apache.hadoop.util.VersionInfo;
+import org.apache.hadoop.util.curator.ZKCuratorManager;
 import org.apache.hadoop.yarn.YarnUncaughtExceptionHandler;
 import org.apache.hadoop.yarn.api.records.ApplicationAttemptId;
 import org.apache.hadoop.yarn.api.records.ApplicationId;
@@ -64,9 +58,9 @@ import org.apache.hadoop.yarn.event.AsyncDispatcher;
 import org.apache.hadoop.yarn.event.Dispatcher;
 import org.apache.hadoop.yarn.event.EventDispatcher;
 import org.apache.hadoop.yarn.event.EventHandler;
-
 import org.apache.hadoop.yarn.exceptions.YarnException;
 import org.apache.hadoop.yarn.exceptions.YarnRuntimeException;
+import org.apache.hadoop.yarn.metrics.GenericEventTypeMetrics;
 import org.apache.hadoop.yarn.nodelabels.NodeAttributesManager;
 import org.apache.hadoop.yarn.server.resourcemanager.ahs.RMApplicationHistoryWriter;
 import org.apache.hadoop.yarn.server.resourcemanager.amlauncher.AMLauncherEventType;
@@ -101,6 +95,7 @@ import org.apache.hadoop.yarn.server.resourcemanager.rmcontainer.ContainerAlloca
 import org.apache.hadoop.yarn.server.resourcemanager.rmnode.RMNode;
 import org.apache.hadoop.yarn.server.resourcemanager.rmnode.RMNodeEvent;
 import org.apache.hadoop.yarn.server.resourcemanager.rmnode.RMNodeEventType;
+import org.apache.hadoop.yarn.server.resourcemanager.scheduler.MutableConfScheduler;
 import org.apache.hadoop.yarn.server.resourcemanager.scheduler.QueueMetrics;
 import org.apache.hadoop.yarn.server.resourcemanager.scheduler.ResourceScheduler;
 import org.apache.hadoop.yarn.server.resourcemanager.scheduler.SchedulerNode;
@@ -112,7 +107,6 @@ import org.apache.hadoop.yarn.server.resourcemanager.scheduler.constraint.Placem
 import org.apache.hadoop.yarn.server.resourcemanager.scheduler.event.SchedulerEvent;
 import org.apache.hadoop.yarn.server.resourcemanager.scheduler.event.SchedulerEventType;
 import org.apache.hadoop.yarn.server.resourcemanager.scheduler.placement.MultiNodeSortingManager;
-import org.apache.hadoop.yarn.server.resourcemanager.scheduler.MutableConfScheduler;
 import org.apache.hadoop.yarn.server.resourcemanager.security.DelegationTokenRenewer;
 import org.apache.hadoop.yarn.server.resourcemanager.security.ProxyCAManager;
 import org.apache.hadoop.yarn.server.resourcemanager.security.QueueACLsManager;
@@ -135,6 +129,10 @@ import org.apache.hadoop.yarn.webapp.WebApps.Builder;
 import org.apache.hadoop.yarn.webapp.util.WebAppUtils;
 import org.apache.zookeeper.server.auth.DigestAuthenticationProvider;
 import org.eclipse.jetty.webapp.WebAppContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.slf4j.Marker;
+import org.slf4j.MarkerFactory;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -161,7 +159,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 @SuppressWarnings("unchecked")
 public class ResourceManager extends CompositeService
-        implements Recoverable, ResourceManagerMXBean {
+    implements Recoverable, ResourceManagerMXBean {
 
   /**
    * Priority of the ResourceManager shutdown hook.
@@ -292,7 +290,7 @@ public class ResourceManager extends CompositeService
     this.rmLoginUGI = UserGroupInformation.getCurrentUser();
     try {
       doSecureLogin();
-    } catch(IOException ie) {
+    } catch (IOException ie) {
       throw new YarnRuntimeException("Failed to login", ie);
     }
 
@@ -344,8 +342,8 @@ public class ResourceManager extends CompositeService
     createAndInitActiveServices(false);
 
     webAppAddress = WebAppUtils.getWebAppBindURL(this.conf,
-                      YarnConfiguration.RM_BIND_HOST,
-                      WebAppUtils.getRMWebAppURLWithoutScheme(this.conf));
+        YarnConfiguration.RM_BIND_HOST,
+        WebAppUtils.getRMWebAppURLWithoutScheme(this.conf));
 
     RMApplicationHistoryWriter rmApplicationHistoryWriter =
         createRMApplicationHistoryWriter();
@@ -368,6 +366,7 @@ public class ResourceManager extends CompositeService
 
     registerMXBean();
 
+    // 初始化上述注册的所有 Service
     super.serviceInit(this.conf);
   }
 
@@ -402,7 +401,7 @@ public class ResourceManager extends CompositeService
    * @throws IOException If it cannot create the manager.
    */
   public ZKCuratorManager createAndStartZKManager(Configuration
-      config) throws IOException {
+                                                      config) throws IOException {
     ZKCuratorManager manager = new ZKCuratorManager(config);
 
     // Get authentication
@@ -442,7 +441,7 @@ public class ResourceManager extends CompositeService
 
 
   protected QueueACLsManager createQueueACLsManager(ResourceScheduler scheduler,
-      Configuration conf) {
+                                                    Configuration conf) {
     return new QueueACLsManager(scheduler, conf);
   }
 
@@ -475,7 +474,7 @@ public class ResourceManager extends CompositeService
     AsyncDispatcher dispatcher = new AsyncDispatcher("RM Event dispatcher");
     GenericEventTypeMetrics genericEventTypeMetrics =
         GenericEventTypeMetricsManager.
-        create(dispatcher.getName(), NodesListManagerEventType.class);
+            create(dispatcher.getName(), NodesListManagerEventType.class);
     // We can add more
     dispatcher.addMetrics(genericEventTypeMetrics,
         genericEventTypeMetrics.getEnumClass());
@@ -557,7 +556,7 @@ public class ResourceManager extends CompositeService
   protected AMLivelinessMonitor createAMLivelinessMonitor() {
     return new AMLivelinessMonitor(this.rmDispatcher);
   }
-  
+
   protected RMNodeLabelsManager createNodeLabelManager()
       throws InstantiationException, IllegalAccessException {
     return new RMNodeLabelsManager();
@@ -574,18 +573,18 @@ public class ResourceManager extends CompositeService
   }
 
   protected PlacementConstraintManagerService
-      createPlacementConstraintManager() {
+  createPlacementConstraintManager() {
     // Use the in memory Placement Constraint Manager.
     return new MemoryPlacementConstraintManager();
   }
-  
+
   protected DelegationTokenRenewer createDelegationTokenRenewer() {
     return new DelegationTokenRenewer();
   }
 
   protected RMAppManager createRMAppManager() {
     return new RMAppManager(this.rmContext, this.scheduler, this.masterService,
-      this.applicationACLsManager, this.conf);
+        this.applicationACLsManager, this.conf);
   }
 
   protected RMApplicationHistoryWriter createRMApplicationHistoryWriter() {
@@ -709,7 +708,7 @@ public class ResourceManager extends CompositeService
       AMLivelinessMonitor amFinishingMonitor = createAMLivelinessMonitor();
       addService(amFinishingMonitor);
       rmContext.setAMFinishingMonitor(amFinishingMonitor);
-      
+
       RMAppLifetimeMonitor rmAppLifetimeMonitor = createRMAppLifetimeMonitor();
       addService(rmAppLifetimeMonitor);
       rmContext.setRMAppLifetimeMonitor(rmAppLifetimeMonitor);
@@ -759,8 +758,8 @@ public class ResourceManager extends CompositeService
         rmStore = RMStateStoreFactory.getStore(conf);
         boolean isWorkPreservingRecoveryEnabled =
             conf.getBoolean(
-              YarnConfiguration.RM_WORK_PRESERVING_RECOVERY_ENABLED,
-              YarnConfiguration.DEFAULT_RM_WORK_PRESERVING_RECOVERY_ENABLED);
+                YarnConfiguration.RM_WORK_PRESERVING_RECOVERY_ENABLED,
+                YarnConfiguration.DEFAULT_RM_WORK_PRESERVING_RECOVERY_ENABLED);
         rmContext
             .setWorkPreservingRecoveryEnabled(isWorkPreservingRecoveryEnabled);
       } else {
@@ -845,7 +844,7 @@ public class ResourceManager extends CompositeService
 
       masterService = createApplicationMasterService();
       createAndRegisterOpportunisticDispatcher(masterService);
-      addService(masterService) ;
+      addService(masterService);
       rmContext.setApplicationMasterService(masterService);
 
 
@@ -871,7 +870,7 @@ public class ResourceManager extends CompositeService
         delegationTokenRenewer.setRMContext(rmContext);
       }
 
-      if(HAUtil.isFederationEnabled(conf)) {
+      if (HAUtil.isFederationEnabled(conf)) {
         String cId = YarnConfiguration.getClusterId(conf);
         if (cId.isEmpty()) {
           String errMsg =
@@ -900,7 +899,7 @@ public class ResourceManager extends CompositeService
       // Add volume manager to RM context when it is necessary
       String[] amsProcessorList = conf.getStrings(
           YarnConfiguration.RM_APPLICATION_MASTER_SERVICE_PROCESSORS);
-      if (amsProcessorList != null&& Arrays.stream(amsProcessorList)
+      if (amsProcessorList != null && Arrays.stream(amsProcessorList)
           .anyMatch(s -> VolumeAMSProcessor.class.getName().equals(s))) {
         VolumeManager volumeManager = new VolumeManagerImpl();
         rmContext.setVolumeManager(volumeManager);
@@ -934,7 +933,7 @@ public class ResourceManager extends CompositeService
       // need events to move to further states.
       rmStore.start();
 
-      if(recoveryEnabled) {
+      if (recoveryEnabled) {
         try {
           LOG.info("Recovery started");
           rmStore.checkVersion();
@@ -1000,7 +999,7 @@ public class ResourceManager extends CompositeService
       } else {
         // If we're stand-alone, we probably want to shut down, but the if and
         // how depends on the event.
-        switch(event.getType()) {
+        switch (event.getType()) {
         case STATE_STORE_FENCED:
           LOG.error(FATAL, "State store fenced even though the resource " +
               "manager is not configured for high availability. Shutting " +
@@ -1044,6 +1043,7 @@ public class ResourceManager extends CompositeService
       this.eventProcessorMonitor
           .setName("ResourceManager Event Processor Monitor");
     }
+
     // EventProcessorMonitor keeps track of how much CPU the EventProcessor
     // thread is using. It takes a configurable number of samples per minute,
     // and then reports the Avg and Max of previous 60 seconds as cluster
@@ -1055,6 +1055,7 @@ public class ResourceManager extends CompositeService
       private final ThreadMXBean tmxb;
       private final ClusterMetrics clusterMetrics = ClusterMetrics.getMetrics();
       private final int samples;
+
       EventProcessorMonitor(long id, int samplesPerMin) {
         assert samplesPerMin > 0;
         this.tid = id;
@@ -1068,6 +1069,7 @@ public class ResourceManager extends CompositeService
           this.run = false;
         }
       }
+
       public void run() {
         int index = 0;
         long[] values = new long[samples];
@@ -1100,6 +1102,7 @@ public class ResourceManager extends CompositeService
         }
       }
     }
+
     @Override
     protected void serviceStart() throws Exception {
       super.serviceStart();
@@ -1118,7 +1121,7 @@ public class ResourceManager extends CompositeService
     }
   }
 
-    /**
+  /**
    * Transition to standby state in a new thread. The transition operation is
    * asynchronous to avoid deadlock caused by cyclic dependency.
    */
@@ -1185,8 +1188,9 @@ public class ResourceManager extends CompositeService
         try {
           rmApp.handle(event);
         } catch (Throwable t) {
-          LOG.error("Error in handling event type " + event.getType()
-              + " for application " + appID, t);
+          LOG.error(
+              "Error in handling event type " + event.getType() + " for application " + appID,
+              t);
         }
       }
     }
@@ -1285,8 +1289,9 @@ public class ResourceManager extends CompositeService
    * @return builder object
    */
   public static HttpServer2.Builder httpServerTemplateForRM(Configuration conf,
-      final InetSocketAddress httpAddr, final InetSocketAddress httpsAddr,
-      String name) throws IOException {
+                                                            final InetSocketAddress httpAddr,
+                                                            final InetSocketAddress httpsAddr,
+                                                            String name) throws IOException {
     HttpServer2.Builder builder = new HttpServer2.Builder().setName(name)
         .setConf(conf).setSecurityEnabled(false);
 
@@ -1333,7 +1338,7 @@ public class ResourceManager extends CompositeService
             .withXFSProtection(YarnConfiguration.RM_XFS_PREFIX)
             .at(webAppAddress);
     String proxyHostAndPort = rmContext.getProxyHostAndPort(conf);
-    if(WebAppUtils.getResolvedRMWebAppURLWithoutScheme(conf).
+    if (WebAppUtils.getResolvedRMWebAppURLWithoutScheme(conf).
         equals(proxyHostAndPort)) {
       if (HAUtil.isHAEnabled(conf)) {
         fetcher = new AppReportFetcher(conf);
@@ -1369,7 +1374,7 @@ public class ResourceManager extends CompositeService
         }
       }
       if (onDiskPath == null || onDiskPath.isEmpty()) {
-          LOG.error("No war file or webapps found for ui2 !");
+        LOG.error("No war file or webapps found for ui2 !");
       } else {
         if (onDiskPath.endsWith(".war")) {
           uiWebAppContext.setWar(onDiskPath);
@@ -1508,9 +1513,9 @@ public class ResourceManager extends CompositeService
       transitionToActive();
     }
   }
-  
+
   protected void doSecureLogin() throws IOException {
-	InetSocketAddress socAddr = getBindAddress(conf);
+    InetSocketAddress socAddr = getBindAddress(conf);
     SecurityUtil.login(this.conf, YarnConfiguration.RM_KEYTAB,
         YarnConfiguration.RM_PRINCIPAL, socAddr.getHostName());
 
@@ -1539,7 +1544,7 @@ public class ResourceManager extends CompositeService
     rmContext.setHAServiceState(HAServiceState.STOPPING);
     rmStatusInfoBean.unregister();
   }
-  
+
   protected ResourceTrackerService createResourceTrackerService() {
     return new ResourceTrackerService(this.rmContext, this.nodesListManager,
         this.nmLivelinessMonitor,
@@ -1593,9 +1598,9 @@ public class ResourceManager extends CompositeService
    */
   protected RMDelegatedNodeLabelsUpdater createRMDelegatedNodeLabelsUpdater() {
     if (conf.getBoolean(YarnConfiguration.NODE_LABELS_ENABLED,
-            YarnConfiguration.DEFAULT_NODE_LABELS_ENABLED)
+        YarnConfiguration.DEFAULT_NODE_LABELS_ENABLED)
         && YarnConfiguration.isDelegatedCentralizedNodeLabelConfiguration(
-            conf)) {
+        conf)) {
       return new RMDelegatedNodeLabelsUpdater(rmContext);
     } else {
       return null;
@@ -1694,9 +1699,11 @@ public class ResourceManager extends CompositeService
       } else {
         ResourceManager resourceManager = new ResourceManager();
         ShutdownHookManager.get().addShutdownHook(
-          new CompositeServiceShutdownHook(resourceManager),
-          SHUTDOWN_HOOK_PRIORITY);
+            new CompositeServiceShutdownHook(resourceManager),
+            SHUTDOWN_HOOK_PRIORITY);
+        // 初始化
         resourceManager.init(conf);
+        // 启动
         resourceManager.start();
       }
     } catch (Throwable t) {
@@ -1736,24 +1743,24 @@ public class ResourceManager extends CompositeService
   }
 
   private void setSchedulerRecoveryStartAndWaitTime(RMState state,
-      Configuration conf) {
+                                                    Configuration conf) {
     if (!state.getApplicationState().isEmpty()) {
       long waitTime =
           conf.getLong(YarnConfiguration.RM_WORK_PRESERVING_RECOVERY_SCHEDULING_WAIT_MS,
-            YarnConfiguration.DEFAULT_RM_WORK_PRESERVING_RECOVERY_SCHEDULING_WAIT_MS);
+              YarnConfiguration.DEFAULT_RM_WORK_PRESERVING_RECOVERY_SCHEDULING_WAIT_MS);
       rmContext.setSchedulerRecoveryStartAndWaitTime(waitTime);
     }
   }
 
   /**
    * Retrieve RM bind address from configuration.
-   * 
+   *
    * @param conf Configuration.
    * @return InetSocketAddress
    */
   public static InetSocketAddress getBindAddress(Configuration conf) {
     return conf.getSocketAddr(YarnConfiguration.RM_ADDRESS,
-      YarnConfiguration.DEFAULT_RM_ADDRESS, YarnConfiguration.DEFAULT_RM_PORT);
+        YarnConfiguration.DEFAULT_RM_ADDRESS, YarnConfiguration.DEFAULT_RM_PORT);
   }
 
   /**
@@ -1796,13 +1803,13 @@ public class ResourceManager extends CompositeService
         YarnConfiguration.SCHEDULER_CONFIGURATION_STORE_CLASS,
         YarnConfiguration.DEFAULT_CONFIGURATION_STORE);
     switch (confProviderStr) {
-      case YarnConfiguration.MEMORY_CONFIGURATION_STORE:
-      case YarnConfiguration.LEVELDB_CONFIGURATION_STORE:
-      case YarnConfiguration.ZK_CONFIGURATION_STORE:
-      case YarnConfiguration.FS_CONFIGURATION_STORE:
-        isConfigurationMutable = true;
-        break;
-      default:
+    case YarnConfiguration.MEMORY_CONFIGURATION_STORE:
+    case YarnConfiguration.LEVELDB_CONFIGURATION_STORE:
+    case YarnConfiguration.ZK_CONFIGURATION_STORE:
+    case YarnConfiguration.FS_CONFIGURATION_STORE:
+      isConfigurationMutable = true;
+      break;
+    default:
     }
 
     if (scheduler instanceof MutableConfScheduler && isConfigurationMutable) {

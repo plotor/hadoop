@@ -1,33 +1,22 @@
 /**
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*     http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 package org.apache.hadoop.yarn.server.nodemanager.security;
-
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map.Entry;
-import java.util.TreeMap;
-
-import org.apache.hadoop.yarn.server.nodemanager.recovery.RecoveryIterator;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import org.apache.hadoop.classification.InterfaceAudience.Private;
 import org.apache.hadoop.conf.Configuration;
@@ -39,32 +28,42 @@ import org.apache.hadoop.yarn.server.api.records.MasterKey;
 import org.apache.hadoop.yarn.server.nodemanager.recovery.NMNullStateStoreService;
 import org.apache.hadoop.yarn.server.nodemanager.recovery.NMStateStoreService;
 import org.apache.hadoop.yarn.server.nodemanager.recovery.NMStateStoreService.RecoveredContainerTokensState;
+import org.apache.hadoop.yarn.server.nodemanager.recovery.RecoveryIterator;
 import org.apache.hadoop.yarn.server.security.BaseContainerTokenSecretManager;
 import org.apache.hadoop.yarn.server.security.MasterKeyData;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map.Entry;
+import java.util.TreeMap;
 
 /**
  * The NM maintains only two master-keys. The current key that RM knows and the
  * key from the previous rolling-interval.
- * 
+ *
  */
 public class NMContainerTokenSecretManager extends
     BaseContainerTokenSecretManager {
 
   private static final Logger LOG =
-       LoggerFactory.getLogger(NMContainerTokenSecretManager.class);
-  
+      LoggerFactory.getLogger(NMContainerTokenSecretManager.class);
+
   private MasterKeyData previousMasterKey;
   private final TreeMap<Long, List<ContainerId>> recentlyStartedContainerTracker;
   private final NMStateStoreService stateStore;
-  
+
   private String nodeHostAddr;
-  
+
   public NMContainerTokenSecretManager(Configuration conf) {
     this(conf, new NMNullStateStoreService());
   }
 
   public NMContainerTokenSecretManager(Configuration conf,
-      NMStateStoreService stateStore) {
+                                       NMStateStoreService stateStore) {
     super(conf);
     recentlyStartedContainerTracker =
         new TreeMap<Long, List<ContainerId>>();
@@ -132,14 +131,14 @@ public class NMContainerTokenSecretManager extends
    * Used by NodeManagers to create a token-secret-manager with the key obtained
    * from the RM. This can happen during registration or when the RM rolls the
    * master-key and signals the NM.
-   * 
+   *
    * @param masterKeyRecord
    */
   @Private
   public synchronized void setMasterKey(MasterKey masterKeyRecord) {
     // Update keys only if the key has changed.
     if (super.currentMasterKey == null || super.currentMasterKey.getMasterKey()
-          .getKeyId() != masterKeyRecord.getKeyId()) {
+        .getKeyId() != masterKeyRecord.getKeyId()) {
       LOG.info("Rolling master-key for container-tokens, got key with id "
           + masterKeyRecord.getKeyId());
       if (super.currentMasterKey != null) {
@@ -179,7 +178,7 @@ public class NMContainerTokenSecretManager extends
           + " identifier is not valid for current Node manager. Expected : "
           + nodeHostAddr + " Found : " + identifier.getNmHostAddress());
     }
-    
+
     if (masterKeyToUse != null) {
       return retrievePasswordInternal(identifier, masterKeyToUse);
     }
@@ -200,13 +199,12 @@ public class NMContainerTokenSecretManager extends
       ContainerTokenIdentifier tokenId) {
 
     removeAnyContainerTokenIfExpired();
-    
+
     ContainerId containerId = tokenId.getContainerID();
     Long expTime = tokenId.getExpiryTimeStamp();
     // We might have multiple containers with same expiration time.
     if (!recentlyStartedContainerTracker.containsKey(expTime)) {
-      recentlyStartedContainerTracker
-        .put(expTime, new ArrayList<ContainerId>());
+      recentlyStartedContainerTracker.put(expTime, new ArrayList<>());
     }
     recentlyStartedContainerTracker.get(expTime).add(containerId);
     try {

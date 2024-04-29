@@ -18,70 +18,10 @@
 
 package org.apache.hadoop.yarn.server.nodemanager.containermanager.localizer;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
-import static org.mockito.ArgumentMatchers.anyBoolean;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.anyShort;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.argThat;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.isA;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.timeout;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-
-import java.io.File;
-import java.io.IOException;
-import java.io.NotSerializableException;
-import java.io.ObjectInputStream;
-import java.lang.reflect.Constructor;
-import java.net.InetSocketAddress;
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.EnumSet;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Random;
-import java.util.Set;
-import java.util.concurrent.BrokenBarrierException;
-import java.util.concurrent.CyclicBarrier;
-import java.util.concurrent.Future;
-import java.util.concurrent.atomic.AtomicInteger;
-
-import org.apache.hadoop.yarn.server.nodemanager.containermanager.container.ContainerState;
-import org.apache.hadoop.yarn.server.nodemanager.containermanager.deletion.task.FileDeletionMatcher;
-import org.apache.hadoop.yarn.server.nodemanager.executor.LocalizerStartContext;
-import org.junit.Assert;
 import org.apache.commons.io.FileUtils;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.AbstractFileSystem;
-import org.apache.hadoop.fs.CommonConfigurationKeys;
-import org.apache.hadoop.fs.FSDataOutputStream;
-import org.apache.hadoop.fs.FSError;
-import org.apache.hadoop.fs.FileContext;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.*;
 import org.apache.hadoop.fs.Options.ChecksumOpt;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.UnsupportedFileSystemException;
 import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.hadoop.io.DataOutputBuffer;
 import org.apache.hadoop.io.Text;
@@ -89,16 +29,10 @@ import org.apache.hadoop.ipc.Server;
 import org.apache.hadoop.security.Credentials;
 import org.apache.hadoop.security.token.Token;
 import org.apache.hadoop.security.token.TokenIdentifier;
+import org.apache.hadoop.thirdparty.com.google.common.collect.Sets;
 import org.apache.hadoop.util.Progressable;
 import org.apache.hadoop.util.StringUtils;
-import org.apache.hadoop.yarn.api.records.ApplicationAttemptId;
-import org.apache.hadoop.yarn.api.records.ApplicationId;
-import org.apache.hadoop.yarn.api.records.ContainerId;
-import org.apache.hadoop.yarn.api.records.LocalResource;
-import org.apache.hadoop.yarn.api.records.LocalResourceType;
-import org.apache.hadoop.yarn.api.records.LocalResourceVisibility;
-import org.apache.hadoop.yarn.api.records.SerializedException;
-import org.apache.hadoop.yarn.api.records.URL;
+import org.apache.hadoop.yarn.api.records.*;
 import org.apache.hadoop.yarn.conf.YarnConfiguration;
 import org.apache.hadoop.yarn.event.AsyncDispatcher;
 import org.apache.hadoop.yarn.event.DrainDispatcher;
@@ -110,11 +44,7 @@ import org.apache.hadoop.yarn.server.nodemanager.DeletionService;
 import org.apache.hadoop.yarn.server.nodemanager.LocalDirsHandlerService;
 import org.apache.hadoop.yarn.server.nodemanager.NodeManager.NMContext;
 import org.apache.hadoop.yarn.server.nodemanager.api.ResourceLocalizationSpec;
-import org.apache.hadoop.yarn.server.nodemanager.api.protocolrecords.LocalResourceStatus;
-import org.apache.hadoop.yarn.server.nodemanager.api.protocolrecords.LocalizerAction;
-import org.apache.hadoop.yarn.server.nodemanager.api.protocolrecords.LocalizerHeartbeatResponse;
-import org.apache.hadoop.yarn.server.nodemanager.api.protocolrecords.LocalizerStatus;
-import org.apache.hadoop.yarn.server.nodemanager.api.protocolrecords.ResourceStatusType;
+import org.apache.hadoop.yarn.server.nodemanager.api.protocolrecords.*;
 import org.apache.hadoop.yarn.server.nodemanager.api.protocolrecords.impl.pb.LocalResourceStatusPBImpl;
 import org.apache.hadoop.yarn.server.nodemanager.api.protocolrecords.impl.pb.LocalizerStatusPBImpl;
 import org.apache.hadoop.yarn.server.nodemanager.containermanager.application.Application;
@@ -122,26 +52,14 @@ import org.apache.hadoop.yarn.server.nodemanager.containermanager.application.Ap
 import org.apache.hadoop.yarn.server.nodemanager.containermanager.application.ApplicationEventType;
 import org.apache.hadoop.yarn.server.nodemanager.containermanager.application.ApplicationImpl;
 import org.apache.hadoop.yarn.server.nodemanager.containermanager.container.Container;
-import org.apache.hadoop.yarn.server.nodemanager.containermanager.container.ContainerEvent;
-import org.apache.hadoop.yarn.server.nodemanager.containermanager.container.ContainerEventType;
-import org.apache.hadoop.yarn.server.nodemanager.containermanager.container.ContainerImpl;
-import org.apache.hadoop.yarn.server.nodemanager.containermanager.container.ContainerResourceFailedEvent;
+import org.apache.hadoop.yarn.server.nodemanager.containermanager.container.ContainerState;
+import org.apache.hadoop.yarn.server.nodemanager.containermanager.container.*;
+import org.apache.hadoop.yarn.server.nodemanager.containermanager.deletion.task.FileDeletionMatcher;
 import org.apache.hadoop.yarn.server.nodemanager.containermanager.localizer.ResourceLocalizationService.LocalizerRunner;
 import org.apache.hadoop.yarn.server.nodemanager.containermanager.localizer.ResourceLocalizationService.LocalizerTracker;
 import org.apache.hadoop.yarn.server.nodemanager.containermanager.localizer.ResourceLocalizationService.PublicLocalizer;
-import org.apache.hadoop.yarn.server.nodemanager.containermanager.localizer.event.ApplicationLocalizationEvent;
-import org.apache.hadoop.yarn.server.nodemanager.containermanager.localizer.event.ContainerLocalizationCleanupEvent;
-import org.apache.hadoop.yarn.server.nodemanager.containermanager.localizer.event.ContainerLocalizationEvent;
-import org.apache.hadoop.yarn.server.nodemanager.containermanager.localizer.event.ContainerLocalizationRequestEvent;
-import org.apache.hadoop.yarn.server.nodemanager.containermanager.localizer.event.LocalizationEvent;
-import org.apache.hadoop.yarn.server.nodemanager.containermanager.localizer.event.LocalizationEventType;
-import org.apache.hadoop.yarn.server.nodemanager.containermanager.localizer.event.LocalizerEvent;
-import org.apache.hadoop.yarn.server.nodemanager.containermanager.localizer.event.LocalizerEventType;
-import org.apache.hadoop.yarn.server.nodemanager.containermanager.localizer.event.LocalizerResourceRequestEvent;
-import org.apache.hadoop.yarn.server.nodemanager.containermanager.localizer.event.ResourceFailedLocalizationEvent;
-import org.apache.hadoop.yarn.server.nodemanager.containermanager.localizer.event.ResourceLocalizedEvent;
-import org.apache.hadoop.yarn.server.nodemanager.containermanager.localizer.event.ResourceReleaseEvent;
-import org.apache.hadoop.yarn.server.nodemanager.containermanager.localizer.event.ResourceRequestEvent;
+import org.apache.hadoop.yarn.server.nodemanager.containermanager.localizer.event.*;
+import org.apache.hadoop.yarn.server.nodemanager.executor.LocalizerStartContext;
 import org.apache.hadoop.yarn.server.nodemanager.metrics.NodeManagerMetrics;
 import org.apache.hadoop.yarn.server.nodemanager.recovery.NMMemoryStateStoreService;
 import org.apache.hadoop.yarn.server.nodemanager.recovery.NMNullStateStoreService;
@@ -150,10 +68,7 @@ import org.apache.hadoop.yarn.server.nodemanager.security.NMContainerTokenSecret
 import org.apache.hadoop.yarn.server.nodemanager.security.NMTokenSecretManagerInNM;
 import org.apache.hadoop.yarn.server.security.ApplicationACLsManager;
 import org.apache.hadoop.yarn.server.utils.BuilderUtils;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Test;
+import org.junit.*;
 import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatcher;
 import org.mockito.Mockito;
@@ -161,7 +76,24 @@ import org.mockito.internal.matchers.VarargMatcher;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 
-import org.apache.hadoop.thirdparty.com.google.common.collect.Sets;
+import java.io.File;
+import java.io.IOException;
+import java.io.NotSerializableException;
+import java.io.ObjectInputStream;
+import java.lang.reflect.Constructor;
+import java.net.InetSocketAddress;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.util.*;
+import java.util.concurrent.BrokenBarrierException;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicInteger;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
 
 public class TestResourceLocalizationService {
 
@@ -251,9 +183,9 @@ public class TestResourceLocalizationService {
         verify(spylfs)
           .mkdir(eq(publicCache),
               eq(defaultPerm), eq(true));
-        Path nmPriv = new Path(p, ResourceLocalizationService.NM_PRIVATE_DIR);
+        Path nmPriv = new Path(p, AbstractResourceLocalizationService.NM_PRIVATE_DIR);
         verify(spylfs).mkdir(eq(nmPriv),
-            eq(ResourceLocalizationService.NM_PRIVATE_PERM), eq(true));
+            eq(AbstractResourceLocalizationService.NM_PRIVATE_PERM), eq(true));
       }
     } finally {
       dispatcher.stop();
@@ -316,11 +248,11 @@ public class TestResourceLocalizationService {
         verify(spylfs)
             .mkdir(eq(publicCache),
                 eq(defaultPerm), eq(true));
-        Path nmPriv = new Path(p, ResourceLocalizationService.NM_PRIVATE_DIR);
+        Path nmPriv = new Path(p, AbstractResourceLocalizationService.NM_PRIVATE_DIR);
         verify(spylfs)
             .rename(eq(usercache), any(Path.class), any());
         verify(spylfs).mkdir(eq(nmPriv),
-            eq(ResourceLocalizationService.NM_PRIVATE_PERM), eq(true));
+            eq(AbstractResourceLocalizationService.NM_PRIVATE_PERM), eq(true));
       }
     } finally {
       dispatcher.stop();
@@ -858,7 +790,7 @@ public class TestResourceLocalizationService {
     FsPermission defaultPermission =
         FsPermission.getDirDefault().applyUMask(lfs.getUMask());
     FsPermission nmPermission =
-        ResourceLocalizationService.NM_PRIVATE_PERM.applyUMask(lfs.getUMask());
+        AbstractResourceLocalizationService.NM_PRIVATE_PERM.applyUMask(lfs.getUMask());
     final Path userDir =
         new Path(sDirs[0].substring("file:".length()),
           ContainerLocalizer.USERCACHE);
@@ -867,7 +799,7 @@ public class TestResourceLocalizationService {
           ContainerLocalizer.FILECACHE);
     final Path sysDir =
         new Path(sDirs[0].substring("file:".length()),
-          ResourceLocalizationService.NM_PRIVATE_DIR);
+          AbstractResourceLocalizationService.NM_PRIVATE_DIR);
     final FileStatus fs =
         new FileStatus(0, true, 1, 0, System.currentTimeMillis(), 0,
           defaultPermission, "", "", new Path(sDirs[0]));
@@ -1156,7 +1088,7 @@ public class TestResourceLocalizationService {
     FsPermission defaultPermission =
         FsPermission.getDirDefault().applyUMask(lfs.getUMask());
     FsPermission nmPermission =
-        ResourceLocalizationService.NM_PRIVATE_PERM.applyUMask(lfs.getUMask());
+        AbstractResourceLocalizationService.NM_PRIVATE_PERM.applyUMask(lfs.getUMask());
     final Path userDir =
         new Path(sDirs[0].substring("file:".length()),
           ContainerLocalizer.USERCACHE);
@@ -1165,7 +1097,7 @@ public class TestResourceLocalizationService {
           ContainerLocalizer.FILECACHE);
     final Path sysDir =
         new Path(sDirs[0].substring("file:".length()),
-          ResourceLocalizationService.NM_PRIVATE_DIR);
+            AbstractResourceLocalizationService.NM_PRIVATE_DIR);
     final FileStatus fs =
         new FileStatus(0, true, 1, 0, System.currentTimeMillis(), 0,
           defaultPermission, "", "", new Path(sDirs[0]));
@@ -1228,7 +1160,7 @@ public class TestResourceLocalizationService {
     FsPermission defaultPermission =
         FsPermission.getDirDefault().applyUMask(lfs.getUMask());
     FsPermission nmPermission =
-        ResourceLocalizationService.NM_PRIVATE_PERM.applyUMask(lfs.getUMask());
+        AbstractResourceLocalizationService.NM_PRIVATE_PERM.applyUMask(lfs.getUMask());
     final Path userDir =
         new Path(sDirs[0].substring("file:".length()),
             ContainerLocalizer.USERCACHE);
@@ -1237,7 +1169,7 @@ public class TestResourceLocalizationService {
             ContainerLocalizer.FILECACHE);
     final Path sysDir =
         new Path(sDirs[0].substring("file:".length()),
-            ResourceLocalizationService.NM_PRIVATE_DIR);
+            AbstractResourceLocalizationService.NM_PRIVATE_DIR);
     final FileStatus fs =
         new FileStatus(0, true, 1, 0, System.currentTimeMillis(), 0,
             defaultPermission, "", "", new Path(sDirs[0]));
@@ -1295,8 +1227,8 @@ public class TestResourceLocalizationService {
   }
 
   private void initApp(ResourceLocalizationService spyService,
-      EventHandler<ApplicationEvent> applicationBus, Application app,
-      ApplicationId appId, DrainDispatcher dispatcher) {
+                       EventHandler<ApplicationEvent> applicationBus, Application app,
+                       ApplicationId appId, DrainDispatcher dispatcher) {
     spyService.handle(new ApplicationLocalizationEvent(
         LocalizationEventType.INIT_APPLICATION_RESOURCES, app));
     ArgumentMatcher<ApplicationEvent> matchesAppInit =
@@ -1307,8 +1239,8 @@ public class TestResourceLocalizationService {
   }
 
   private void doLocalization(ResourceLocalizationService spyService,
-      DrainDispatcher dispatcher, DummyExecutor exec,
-      DeletionService delService)
+                              DrainDispatcher dispatcher, DummyExecutor exec,
+                              DeletionService delService)
       throws IOException, URISyntaxException, InterruptedException {
     final Application app = mock(Application.class);
     final ApplicationId appId =
@@ -1787,7 +1719,7 @@ public class TestResourceLocalizationService {
       Path overflowFolder = new Path(publicCache, "0");
       lfs.mkdir(overflowFolder, wrongPerm, false);
 
-      spyService.lfs.setUMask(new FsPermission((short) 0777));
+      spyService.files.setUMask(new FsPermission((short) 0777));
 
       final String user = "user0";
       // init application
@@ -2727,9 +2659,9 @@ public class TestResourceLocalizationService {
   }
 
   private boolean waitForResourceState(LocalizedResource lr,
-      ResourceLocalizationService service, LocalResourceRequest req,
-      LocalResourceVisibility vis, String user, ApplicationId appId,
-      ResourceState resourceState, long maxWaitTime) {
+                                       ResourceLocalizationService service, LocalResourceRequest req,
+                                       LocalResourceVisibility vis, String user, ApplicationId appId,
+                                       ResourceState resourceState, long maxWaitTime) {
     LocalResourcesTracker tracker = null;
     // checking tracker is created
     do {
@@ -2952,7 +2884,7 @@ public class TestResourceLocalizationService {
     FsPermission defaultPermission =
         FsPermission.getDirDefault().applyUMask(lfs.getUMask());
     FsPermission nmPermission =
-        ResourceLocalizationService.NM_PRIVATE_PERM.applyUMask(lfs.getUMask());
+        AbstractResourceLocalizationService.NM_PRIVATE_PERM.applyUMask(lfs.getUMask());
     final FileStatus fs =
         new FileStatus(0, true, 1, 0, System.currentTimeMillis(), 0,
           defaultPermission, "", "", localDirs.get(0));
@@ -2985,7 +2917,7 @@ public class TestResourceLocalizationService {
       appLocalDirs.add(appDir);
 
       Path sysDir =
-          new Path(tmpDirs.get(i), ResourceLocalizationService.NM_PRIVATE_DIR);
+          new Path(tmpDirs.get(i), AbstractResourceLocalizationService.NM_PRIVATE_DIR);
       Path appSysDir = new Path(sysDir, appId.toString());
       Path containerSysDir = new Path(appSysDir, c.getContainerId().toString());
 

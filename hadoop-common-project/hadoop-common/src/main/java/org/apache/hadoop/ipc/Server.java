@@ -3504,7 +3504,7 @@ public abstract class Server {
   public synchronized void start() {
     responder.start();
     listener.start();
-    if (auxiliaryListenerMap != null && auxiliaryListenerMap.size() > 0) {
+    if (auxiliaryListenerMap != null && !auxiliaryListenerMap.isEmpty()) {
       for (Listener newListener : auxiliaryListenerMap.values()) {
         newListener.start();
       }

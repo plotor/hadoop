@@ -18,42 +18,14 @@
 
 package org.apache.hadoop.yarn.server.nodemanager;
 
-import static org.mockito.ArgumentMatchers.argThat;
-import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.io.File;
-import java.io.IOException;
-import java.security.PrivilegedExceptionAction;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
-import org.apache.hadoop.fs.FileContext;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.RemoteIterator;
-import org.apache.hadoop.fs.UnsupportedFileSystemException;
+import org.apache.hadoop.fs.*;
 import org.apache.hadoop.net.ServerSocketUtil;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.yarn.api.ContainerManagementProtocol;
 import org.apache.hadoop.yarn.api.protocolrecords.GetContainerStatusesRequest;
 import org.apache.hadoop.yarn.api.protocolrecords.StartContainerRequest;
 import org.apache.hadoop.yarn.api.protocolrecords.StartContainersRequest;
-import org.apache.hadoop.yarn.api.records.ApplicationAttemptId;
-import org.apache.hadoop.yarn.api.records.ApplicationId;
-import org.apache.hadoop.yarn.api.records.ContainerId;
-import org.apache.hadoop.yarn.api.records.ContainerLaunchContext;
-import org.apache.hadoop.yarn.api.records.LocalResource;
-import org.apache.hadoop.yarn.api.records.LocalResourceType;
-import org.apache.hadoop.yarn.api.records.LocalResourceVisibility;
-import org.apache.hadoop.yarn.api.records.NodeId;
-import org.apache.hadoop.yarn.api.records.URL;
+import org.apache.hadoop.yarn.api.records.*;
 import org.apache.hadoop.yarn.conf.YarnConfiguration;
 import org.apache.hadoop.yarn.event.Dispatcher;
 import org.apache.hadoop.yarn.exceptions.YarnException;
@@ -63,13 +35,23 @@ import org.apache.hadoop.yarn.server.nodemanager.containermanager.container.Cont
 import org.apache.hadoop.yarn.server.nodemanager.containermanager.container.ContainerState;
 import org.apache.hadoop.yarn.server.nodemanager.containermanager.deletion.task.FileDeletionMatcher;
 import org.apache.hadoop.yarn.server.nodemanager.containermanager.localizer.ContainerLocalizer;
-import org.apache.hadoop.yarn.server.nodemanager.containermanager.localizer.ResourceLocalizationService;
+import org.apache.hadoop.yarn.server.nodemanager.containermanager.localizer.AbstractResourceLocalizationService;
 import org.apache.hadoop.yarn.server.nodemanager.health.NodeHealthCheckerService;
 import org.apache.hadoop.yarn.util.Records;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.File;
+import java.io.IOException;
+import java.security.PrivilegedExceptionAction;
+import java.util.*;
+
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.*;
 
 public class TestNodeManagerReboot {
 
@@ -190,7 +172,7 @@ public class TestNodeManagerReboot {
       "There should be files or Dirs under nm_private when "
           + "container is launched",
       numOfLocalDirs(nmLocalDir.getAbsolutePath(),
-        ResourceLocalizationService.NM_PRIVATE_DIR) > 0);
+          AbstractResourceLocalizationService.NM_PRIVATE_DIR) > 0);
 
     // restart the NodeManager
     restartNM(MAX_TRIES);
@@ -198,7 +180,7 @@ public class TestNodeManagerReboot {
 
     verify(delService, times(1)).delete(argThat(new FileDeletionMatcher(
         delService, null,
-        new Path(ResourceLocalizationService.NM_PRIVATE_DIR + "_DEL_"), null)));
+        new Path(AbstractResourceLocalizationService.NM_PRIVATE_DIR + "_DEL_"), null)));
     verify(delService, times(1)).delete(argThat(new FileDeletionMatcher(
         delService, null, new Path(ContainerLocalizer.FILECACHE + "_DEL_"),
         null)));
@@ -225,7 +207,7 @@ public class TestNodeManagerReboot {
       ContainerLocalizer.USERCACHE) > 0
         || numOfLocalDirs(nmLocalDir.getAbsolutePath(),
           ContainerLocalizer.FILECACHE) > 0 || numOfLocalDirs(
-      nmLocalDir.getAbsolutePath(), ResourceLocalizationService.NM_PRIVATE_DIR) > 0)
+      nmLocalDir.getAbsolutePath(), AbstractResourceLocalizationService.NM_PRIVATE_DIR) > 0)
         && numTries < maxTries) {
       try {
         Thread.sleep(500);
@@ -245,7 +227,7 @@ public class TestNodeManagerReboot {
             && numOfLocalDirs(nmLocalDir.getAbsolutePath(),
               ContainerLocalizer.FILECACHE) == 0
             && numOfLocalDirs(nmLocalDir.getAbsolutePath(),
-              ResourceLocalizationService.NM_PRIVATE_DIR) == 0);
+            AbstractResourceLocalizationService.NM_PRIVATE_DIR) == 0);
     
     Assert
     .assertTrue(

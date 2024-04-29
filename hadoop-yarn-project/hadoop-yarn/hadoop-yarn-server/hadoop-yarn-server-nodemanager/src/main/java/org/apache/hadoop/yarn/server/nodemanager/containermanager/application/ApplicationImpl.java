@@ -1,39 +1,28 @@
 /**
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*     http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 package org.apache.hadoop.yarn.server.nodemanager.containermanager.application;
 
-import java.io.IOException;
-import java.util.EnumSet;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
-import java.util.concurrent.locks.ReentrantReadWriteLock.ReadLock;
-import java.util.concurrent.locks.ReentrantReadWriteLock.WriteLock;
-
-import org.apache.hadoop.thirdparty.com.google.common.annotations.VisibleForTesting;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import org.apache.hadoop.thirdparty.protobuf.ByteString;
-import org.apache.hadoop.io.DataOutputBuffer;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.io.DataOutputBuffer;
 import org.apache.hadoop.security.Credentials;
+import org.apache.hadoop.thirdparty.com.google.common.annotations.VisibleForTesting;
+import org.apache.hadoop.thirdparty.protobuf.ByteString;
 import org.apache.hadoop.yarn.api.records.ApplicationAccessType;
 import org.apache.hadoop.yarn.api.records.ApplicationId;
 import org.apache.hadoop.yarn.api.records.ContainerExitStatus;
@@ -54,7 +43,7 @@ import org.apache.hadoop.yarn.server.nodemanager.containermanager.AuxServicesEve
 import org.apache.hadoop.yarn.server.nodemanager.containermanager.container.Container;
 import org.apache.hadoop.yarn.server.nodemanager.containermanager.container.ContainerInitEvent;
 import org.apache.hadoop.yarn.server.nodemanager.containermanager.container.ContainerKillEvent;
-import org.apache.hadoop.yarn.server.nodemanager.containermanager.localizer.ResourceLocalizationService;
+import org.apache.hadoop.yarn.server.nodemanager.containermanager.localizer.AbstractResourceLocalizationService;
 import org.apache.hadoop.yarn.server.nodemanager.containermanager.localizer.event.ApplicationLocalizationEvent;
 import org.apache.hadoop.yarn.server.nodemanager.containermanager.localizer.event.LocalizationEventType;
 import org.apache.hadoop.yarn.server.nodemanager.containermanager.logaggregation.LogAggregationService;
@@ -68,6 +57,16 @@ import org.apache.hadoop.yarn.state.MultipleArcTransition;
 import org.apache.hadoop.yarn.state.SingleArcTransition;
 import org.apache.hadoop.yarn.state.StateMachine;
 import org.apache.hadoop.yarn.state.StateMachineFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
+import java.util.EnumSet;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock.ReadLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock.WriteLock;
 
 /**
  * The state machine for the representation of an Application
@@ -88,7 +87,7 @@ public class ApplicationImpl implements Application {
   private final Context context;
 
   private static final Logger LOG =
-       LoggerFactory.getLogger(ApplicationImpl.class);
+      LoggerFactory.getLogger(ApplicationImpl.class);
 
   private LogAggregationContext logAggregationContext;
 
@@ -105,13 +104,13 @@ public class ApplicationImpl implements Application {
   private final NMStateStoreService appStateStore;
 
   public ApplicationImpl(Dispatcher dispatcher, String user,
-      ApplicationId appId, Credentials credentials, Context context) {
+                         ApplicationId appId, Credentials credentials, Context context) {
     this(dispatcher, user, null, appId, credentials, context, -1L);
   }
 
   public ApplicationImpl(Dispatcher dispatcher, String user,
-      FlowContext flowContext, ApplicationId appId, Credentials credentials,
-      Context context, long recoveredLogInitedTime) {
+                         FlowContext flowContext, ApplicationId appId, Credentials credentials,
+                         Context context, long recoveredLogInitedTime) {
     this.dispatcher = dispatcher;
     this.user = user;
     this.appId = appId;
@@ -137,10 +136,10 @@ public class ApplicationImpl implements Application {
   }
 
   public ApplicationImpl(Dispatcher dispatcher, String user,
-      FlowContext flowContext, ApplicationId appId,
-      Credentials credentials, Context context) {
+                         FlowContext flowContext, ApplicationId appId,
+                         Credentials credentials, Context context) {
     this(dispatcher, user, flowContext, appId, credentials,
-      context, -1);
+        context, -1);
   }
 
   /**
@@ -216,62 +215,62 @@ public class ApplicationImpl implements Application {
       new InitContainerTransition();
 
   private static StateMachineFactory<ApplicationImpl, ApplicationState,
-          ApplicationEventType, ApplicationEvent> stateMachineFactory =
+      ApplicationEventType, ApplicationEvent> stateMachineFactory =
       new StateMachineFactory<ApplicationImpl, ApplicationState,
           ApplicationEventType, ApplicationEvent>(ApplicationState.NEW)
 
-           // Transitions from NEW state
-           .addTransition(ApplicationState.NEW, ApplicationState.INITING,
-               ApplicationEventType.INIT_APPLICATION, new AppInitTransition())
-           .addTransition(ApplicationState.NEW, ApplicationState.NEW,
-               ApplicationEventType.INIT_CONTAINER,
-               INIT_CONTAINER_TRANSITION)
+          // Transitions from NEW state
+          .addTransition(ApplicationState.NEW, ApplicationState.INITING,
+              ApplicationEventType.INIT_APPLICATION, new AppInitTransition())
+          .addTransition(ApplicationState.NEW, ApplicationState.NEW,
+              ApplicationEventType.INIT_CONTAINER,
+              INIT_CONTAINER_TRANSITION)
 
-           // Transitions from INITING state
-           .addTransition(ApplicationState.INITING, ApplicationState.INITING,
-               ApplicationEventType.INIT_CONTAINER,
-               INIT_CONTAINER_TRANSITION)
-           .addTransition(ApplicationState.INITING,
-               EnumSet.of(ApplicationState.FINISHING_CONTAINERS_WAIT,
-                   ApplicationState.APPLICATION_RESOURCES_CLEANINGUP),
-               ApplicationEventType.FINISH_APPLICATION,
-               new AppFinishTriggeredTransition())
-           .addTransition(ApplicationState.INITING, ApplicationState.INITING,
-               ApplicationEventType.APPLICATION_CONTAINER_FINISHED,
-               CONTAINER_DONE_TRANSITION)
-           .addTransition(ApplicationState.INITING, ApplicationState.INITING,
-               ApplicationEventType.APPLICATION_LOG_HANDLING_INITED,
-               new AppLogInitDoneTransition())
-           .addTransition(ApplicationState.INITING, ApplicationState.INITING,
-               ApplicationEventType.APPLICATION_LOG_HANDLING_FAILED,
-               new AppLogInitFailTransition())
-           .addTransition(ApplicationState.INITING, ApplicationState.RUNNING,
-               ApplicationEventType.APPLICATION_INITED,
-               new AppInitDoneTransition())
+          // Transitions from INITING state
+          .addTransition(ApplicationState.INITING, ApplicationState.INITING,
+              ApplicationEventType.INIT_CONTAINER,
+              INIT_CONTAINER_TRANSITION)
+          .addTransition(ApplicationState.INITING,
+              EnumSet.of(ApplicationState.FINISHING_CONTAINERS_WAIT,
+                  ApplicationState.APPLICATION_RESOURCES_CLEANINGUP),
+              ApplicationEventType.FINISH_APPLICATION,
+              new AppFinishTriggeredTransition())
+          .addTransition(ApplicationState.INITING, ApplicationState.INITING,
+              ApplicationEventType.APPLICATION_CONTAINER_FINISHED,
+              CONTAINER_DONE_TRANSITION)
+          .addTransition(ApplicationState.INITING, ApplicationState.INITING,
+              ApplicationEventType.APPLICATION_LOG_HANDLING_INITED,
+              new AppLogInitDoneTransition())
+          .addTransition(ApplicationState.INITING, ApplicationState.INITING,
+              ApplicationEventType.APPLICATION_LOG_HANDLING_FAILED,
+              new AppLogInitFailTransition())
+          .addTransition(ApplicationState.INITING, ApplicationState.RUNNING,
+              ApplicationEventType.APPLICATION_INITED,
+              new AppInitDoneTransition())
 
-           // Transitions from RUNNING state
-           .addTransition(ApplicationState.RUNNING,
-               ApplicationState.RUNNING,
-               ApplicationEventType.INIT_CONTAINER,
-               INIT_CONTAINER_TRANSITION)
-           .addTransition(ApplicationState.RUNNING,
-               ApplicationState.RUNNING,
-               ApplicationEventType.APPLICATION_CONTAINER_FINISHED,
-               CONTAINER_DONE_TRANSITION)
-           .addTransition(
-               ApplicationState.RUNNING,
-               EnumSet.of(ApplicationState.FINISHING_CONTAINERS_WAIT,
-                   ApplicationState.APPLICATION_RESOURCES_CLEANINGUP),
-               ApplicationEventType.FINISH_APPLICATION,
-               new AppFinishTriggeredTransition())
+          // Transitions from RUNNING state
+          .addTransition(ApplicationState.RUNNING,
+              ApplicationState.RUNNING,
+              ApplicationEventType.INIT_CONTAINER,
+              INIT_CONTAINER_TRANSITION)
+          .addTransition(ApplicationState.RUNNING,
+              ApplicationState.RUNNING,
+              ApplicationEventType.APPLICATION_CONTAINER_FINISHED,
+              CONTAINER_DONE_TRANSITION)
+          .addTransition(
+              ApplicationState.RUNNING,
+              EnumSet.of(ApplicationState.FINISHING_CONTAINERS_WAIT,
+                  ApplicationState.APPLICATION_RESOURCES_CLEANINGUP),
+              ApplicationEventType.FINISH_APPLICATION,
+              new AppFinishTriggeredTransition())
 
-           // Transitions from FINISHING_CONTAINERS_WAIT state.
-           .addTransition(
-               ApplicationState.FINISHING_CONTAINERS_WAIT,
-               EnumSet.of(ApplicationState.FINISHING_CONTAINERS_WAIT,
-                   ApplicationState.APPLICATION_RESOURCES_CLEANINGUP),
-               ApplicationEventType.APPLICATION_CONTAINER_FINISHED,
-               new AppFinishTransition())
+          // Transitions from FINISHING_CONTAINERS_WAIT state.
+          .addTransition(
+              ApplicationState.FINISHING_CONTAINERS_WAIT,
+              EnumSet.of(ApplicationState.FINISHING_CONTAINERS_WAIT,
+                  ApplicationState.APPLICATION_RESOURCES_CLEANINGUP),
+              ApplicationEventType.APPLICATION_CONTAINER_FINISHED,
+              new AppFinishTransition())
           .addTransition(ApplicationState.FINISHING_CONTAINERS_WAIT,
               ApplicationState.FINISHING_CONTAINERS_WAIT,
               ApplicationEventType.INIT_CONTAINER,
@@ -284,14 +283,14 @@ public class ApplicationImpl implements Application {
                   ApplicationEventType.APPLICATION_INITED,
                   ApplicationEventType.FINISH_APPLICATION))
 
-           // Transitions from APPLICATION_RESOURCES_CLEANINGUP state
-           .addTransition(ApplicationState.APPLICATION_RESOURCES_CLEANINGUP,
-               ApplicationState.APPLICATION_RESOURCES_CLEANINGUP,
-               ApplicationEventType.APPLICATION_CONTAINER_FINISHED)
-           .addTransition(ApplicationState.APPLICATION_RESOURCES_CLEANINGUP,
-               ApplicationState.FINISHED,
-               ApplicationEventType.APPLICATION_RESOURCES_CLEANEDUP,
-               new AppCompletelyDoneTransition())
+          // Transitions from APPLICATION_RESOURCES_CLEANINGUP state
+          .addTransition(ApplicationState.APPLICATION_RESOURCES_CLEANINGUP,
+              ApplicationState.APPLICATION_RESOURCES_CLEANINGUP,
+              ApplicationEventType.APPLICATION_CONTAINER_FINISHED)
+          .addTransition(ApplicationState.APPLICATION_RESOURCES_CLEANINGUP,
+              ApplicationState.FINISHED,
+              ApplicationEventType.APPLICATION_RESOURCES_CLEANEDUP,
+              new AppCompletelyDoneTransition())
           .addTransition(ApplicationState.APPLICATION_RESOURCES_CLEANINGUP,
               ApplicationState.APPLICATION_RESOURCES_CLEANINGUP,
               ApplicationEventType.INIT_CONTAINER,
@@ -305,30 +304,30 @@ public class ApplicationImpl implements Application {
                   ApplicationEventType.APPLICATION_INITED,
                   ApplicationEventType.FINISH_APPLICATION))
 
-           // Transitions from FINISHED state
-           .addTransition(ApplicationState.FINISHED,
-               ApplicationState.FINISHED,
-               EnumSet.of(
-                   ApplicationEventType.APPLICATION_LOG_HANDLING_FINISHED,
-                   ApplicationEventType.APPLICATION_LOG_HANDLING_FAILED),
-               new AppLogsAggregatedTransition())
+          // Transitions from FINISHED state
+          .addTransition(ApplicationState.FINISHED,
+              ApplicationState.FINISHED,
+              EnumSet.of(
+                  ApplicationEventType.APPLICATION_LOG_HANDLING_FINISHED,
+                  ApplicationEventType.APPLICATION_LOG_HANDLING_FAILED),
+              new AppLogsAggregatedTransition())
           .addTransition(ApplicationState.FINISHED,
               ApplicationState.FINISHED,
               ApplicationEventType.INIT_CONTAINER,
               INIT_CONTAINER_TRANSITION)
-           .addTransition(ApplicationState.FINISHED, ApplicationState.FINISHED,
-               EnumSet.of(
+          .addTransition(ApplicationState.FINISHED, ApplicationState.FINISHED,
+              EnumSet.of(
                   ApplicationEventType.APPLICATION_LOG_HANDLING_INITED,
                   ApplicationEventType.APPLICATION_CONTAINER_FINISHED,
                   ApplicationEventType.FINISH_APPLICATION))
-           // create the topology tables
-           .installTopology();
+          // create the topology tables
+          .installTopology();
 
   private final StateMachine<ApplicationState, ApplicationEventType, ApplicationEvent> stateMachine;
 
   /**
    * Notify services of new application.
-   * 
+   * <p>
    * In particular, this initializes the {@link LogAggregationService}
    */
   @SuppressWarnings("unchecked")
@@ -336,7 +335,7 @@ public class ApplicationImpl implements Application {
       SingleArcTransition<ApplicationImpl, ApplicationEvent> {
     @Override
     public void transition(ApplicationImpl app, ApplicationEvent event) {
-      ApplicationInitEvent initEvent = (ApplicationInitEvent)event;
+      ApplicationInitEvent initEvent = (ApplicationInitEvent) event;
       app.applicationACLs = initEvent.getApplicationACLs();
       app.aclsManager.addApplication(app.getAppId(), app.applicationACLs);
       // Inform the logAggregator
@@ -352,8 +351,8 @@ public class ApplicationImpl implements Application {
    * Handles the APPLICATION_LOG_HANDLING_INITED event that occurs after
    * {@link LogAggregationService} has created the directories for the app
    * and started the aggregation thread for the app.
-   * 
-   * In particular, this requests that the {@link ResourceLocalizationService}
+   * <p>
+   * In particular, this requests that the {@link AbstractResourceLocalizationService}
    * localize the application-scoped resources.
    */
   @SuppressWarnings("unchecked")
@@ -387,7 +386,7 @@ public class ApplicationImpl implements Application {
 
     if (app.logAggregationContext != null) {
       builder.setLogAggregationContext((
-          (LogAggregationContextPBImpl)app.logAggregationContext).getProto());
+          (LogAggregationContextPBImpl) app.logAggregationContext).getProto());
     }
 
     builder.clearCredentials();
@@ -399,7 +398,7 @@ public class ApplicationImpl implements Application {
 
     builder.clearAcls();
     if (app.applicationACLs != null) {
-      for (Map.Entry<ApplicationAccessType, String> acl :  app
+      for (Map.Entry<ApplicationAccessType, String> acl : app
           .applicationACLs.entrySet()) {
         YarnProtos.ApplicationACLMapProto p = YarnProtos
             .ApplicationACLMapProto.newBuilder()
@@ -427,10 +426,10 @@ public class ApplicationImpl implements Application {
 
   /**
    * Handles the APPLICATION_LOG_HANDLING_FAILED event that occurs after
-   * {@link LogAggregationService} has failed to initialize the log 
+   * {@link LogAggregationService} has failed to initialize the log
    * aggregation service
-   * 
-   * In particular, this requests that the {@link ResourceLocalizationService}
+   * <p>
+   * In particular, this requests that the {@link AbstractResourceLocalizationService}
    * localize the application-scoped resources.
    */
   @SuppressWarnings("unchecked")
@@ -438,13 +437,14 @@ public class ApplicationImpl implements Application {
       SingleArcTransition<ApplicationImpl, ApplicationEvent> {
     @Override
     public void transition(ApplicationImpl app, ApplicationEvent event) {
-      LOG.warn("Log Aggregation service failed to initialize, there will " + 
-               "be no logs for this application");
+      LOG.warn("Log Aggregation service failed to initialize, there will " +
+          "be no logs for this application");
       app.dispatcher.getEventHandler().handle(
           new ApplicationLocalizationEvent(
               LocalizationEventType.INIT_APPLICATION_RESOURCES, app));
     }
   }
+
   /**
    * Handles INIT_CONTAINER events which request that we launch a new
    * container. When we're still in the INITTING state, we simply
@@ -457,7 +457,7 @@ public class ApplicationImpl implements Application {
     @Override
     public void transition(ApplicationImpl app, ApplicationEvent event) {
       ApplicationContainerInitEvent initEvent =
-        (ApplicationContainerInitEvent) event;
+          (ApplicationContainerInitEvent) event;
       Container container = initEvent.getContainer();
       app.containers.put(container.getContainerId(), container);
       LOG.info("Adding " + container.getContainerId()
@@ -492,13 +492,15 @@ public class ApplicationImpl implements Application {
     public void transition(ApplicationImpl app, ApplicationEvent event) {
       // Start all the containers waiting for ApplicationInit
       for (Container container : app.containers.values()) {
-        app.dispatcher.getEventHandler().handle(new ContainerInitEvent(
-              container.getContainerId()));
+        LOG.info("Send container init event for application: {}, containerId: {}",
+            app.getAppId(), container.getContainerId());
+        app.dispatcher.getEventHandler()
+            .handle(new ContainerInitEvent(container.getContainerId()));
       }
     }
   }
 
-  
+
   static final class ContainerDoneTransition implements
       SingleArcTransition<ApplicationImpl, ApplicationEvent> {
     @Override
@@ -535,8 +537,8 @@ public class ApplicationImpl implements Application {
       MultipleArcTransition<ApplicationImpl, ApplicationEvent, ApplicationState> {
     @Override
     public ApplicationState transition(ApplicationImpl app,
-        ApplicationEvent event) {
-      ApplicationFinishEvent appEvent = (ApplicationFinishEvent)event;
+                                       ApplicationEvent event) {
+      ApplicationFinishEvent appEvent = (ApplicationFinishEvent) event;
       if (app.containers.isEmpty()) {
         // No container to cleanup. Cleanup app level resources.
         app.handleAppFinishWithContainersCleanedup();
@@ -556,11 +558,11 @@ public class ApplicationImpl implements Application {
   }
 
   static class AppFinishTransition implements
-    MultipleArcTransition<ApplicationImpl, ApplicationEvent, ApplicationState> {
+      MultipleArcTransition<ApplicationImpl, ApplicationEvent, ApplicationState> {
 
     @Override
     public ApplicationState transition(ApplicationImpl app,
-        ApplicationEvent event) {
+                                       ApplicationEvent event) {
 
       ApplicationContainerFinishedEvent containerFinishEvent =
           (ApplicationContainerFinishedEvent) event;

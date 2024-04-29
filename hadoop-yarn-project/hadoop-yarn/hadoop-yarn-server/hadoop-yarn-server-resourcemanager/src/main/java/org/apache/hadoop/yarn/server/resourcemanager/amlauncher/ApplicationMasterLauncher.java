@@ -1,58 +1,58 @@
 /**
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*     http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 package org.apache.hadoop.yarn.server.resourcemanager.amlauncher;
+
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.CommonConfigurationKeysPublic;
+import org.apache.hadoop.service.AbstractService;
+import org.apache.hadoop.thirdparty.com.google.common.util.concurrent.ThreadFactoryBuilder;
+import org.apache.hadoop.yarn.conf.YarnConfiguration;
+import org.apache.hadoop.yarn.event.EventHandler;
+import org.apache.hadoop.yarn.server.resourcemanager.RMContext;
+import org.apache.hadoop.yarn.server.resourcemanager.rmapp.attempt.RMAppAttempt;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
-import org.apache.hadoop.thirdparty.com.google.common.util.concurrent.ThreadFactoryBuilder;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.CommonConfigurationKeysPublic;
-import org.apache.hadoop.service.AbstractService;
-import org.apache.hadoop.yarn.conf.YarnConfiguration;
-import org.apache.hadoop.yarn.event.EventHandler;
-import org.apache.hadoop.yarn.server.resourcemanager.RMContext;
-import org.apache.hadoop.yarn.server.resourcemanager.rmapp.attempt.RMAppAttempt;
 
+public class ApplicationMasterLauncher extends AbstractService
+    implements EventHandler<AMLauncherEvent> {
 
-public class ApplicationMasterLauncher extends AbstractService implements
-    EventHandler<AMLauncherEvent> {
-  private static final Logger LOG = LoggerFactory.getLogger(
-      ApplicationMasterLauncher.class);
+  private static final Logger LOG = LoggerFactory.getLogger(ApplicationMasterLauncher.class);
   private ThreadPoolExecutor launcherPool;
   private LauncherThread launcherHandlingThread;
-  
-  private final BlockingQueue<Runnable> masterEvents
-    = new LinkedBlockingQueue<Runnable>();
-  
+
+  private final BlockingQueue<Runnable> masterEvents = new LinkedBlockingQueue<>();
+
   protected final RMContext context;
-  
+
   public ApplicationMasterLauncher(RMContext context) {
     super(ApplicationMasterLauncher.class.getName());
     this.context = context;
     this.launcherHandlingThread = new LauncherThread();
   }
-  
+
   @Override
   protected void serviceInit(Configuration conf) throws Exception {
     int threadCount = conf.getInt(
@@ -62,7 +62,7 @@ public class ApplicationMasterLauncher extends AbstractService implements
         .setNameFormat("ApplicationMasterLauncher #%d")
         .build();
     launcherPool = new ThreadPoolExecutor(threadCount, threadCount, 1,
-        TimeUnit.HOURS, new LinkedBlockingQueue<Runnable>());
+        TimeUnit.HOURS, new LinkedBlockingQueue<>());
     launcherPool.setThreadFactory(tf);
 
     Configuration newConf = new YarnConfiguration(conf);
@@ -79,20 +79,17 @@ public class ApplicationMasterLauncher extends AbstractService implements
     launcherHandlingThread.start();
     super.serviceStart();
   }
-  
-  protected Runnable createRunnableLauncher(RMAppAttempt application, 
-      AMLauncherEventType event) {
-    Runnable launcher =
-        new AMLauncher(context, application, event, getConfig());
-    return launcher;
+
+  protected Runnable createRunnableLauncher(RMAppAttempt application,
+                                            AMLauncherEventType event) {
+    return new AMLauncher(context, application, event, getConfig());
   }
-  
+
   private void launch(RMAppAttempt application) {
-    Runnable launcher = createRunnableLauncher(application, 
-        AMLauncherEventType.LAUNCH);
+    Runnable launcher = createRunnableLauncher(application, AMLauncherEventType.LAUNCH);
     masterEvents.add(launcher);
   }
-  
+
 
   @Override
   protected void serviceStop() throws Exception {
@@ -100,13 +97,13 @@ public class ApplicationMasterLauncher extends AbstractService implements
     try {
       launcherHandlingThread.join();
     } catch (InterruptedException ie) {
-      LOG.info(launcherHandlingThread.getName() + " interrupted during join ", 
-          ie);    }
+      LOG.info(launcherHandlingThread.getName() + " interrupted during join ", ie);
+    }
     launcherPool.shutdown();
   }
 
   private class LauncherThread extends Thread {
-    
+
     public LauncherThread() {
       super("ApplicationMaster Launcher");
     }
@@ -124,17 +121,18 @@ public class ApplicationMasterLauncher extends AbstractService implements
         }
       }
     }
-  }    
+  }
 
   private void cleanup(RMAppAttempt application) {
     Runnable launcher = createRunnableLauncher(application, AMLauncherEventType.CLEANUP);
     masterEvents.add(launcher);
-  } 
-  
+  }
+
   @Override
-  public synchronized void  handle(AMLauncherEvent appEvent) {
+  public synchronized void handle(AMLauncherEvent appEvent) {
     AMLauncherEventType event = appEvent.getType();
     RMAppAttempt application = appEvent.getAppAttempt();
+    LOG.info("Handle AM launcher event {}", event);
     switch (event) {
     case LAUNCH:
       launch(application);

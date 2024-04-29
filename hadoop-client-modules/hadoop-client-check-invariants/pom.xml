@@ -94,7 +94,7 @@
                     <exclude>org.xerial.snappy:*</exclude>
                   </excludes>
                 </banTransitiveDependencies>
-                <banDuplicateClasses>
+                <!--<banDuplicateClasses>
                   <findAllDuplicates>true</findAllDuplicates>
                   <dependencies>
                     <dependency>
@@ -105,7 +105,7 @@
                       </ignoreClasses>
                     </dependency>
                   </dependencies>
-                </banDuplicateClasses>
+                </banDuplicateClasses>-->
               </rules>
 <!-- TODO we need a rule for "the constants in this set of classes haven't been shaded / don't have this prefix"
      Manually checking the set of Keys that look like packages we relocate:

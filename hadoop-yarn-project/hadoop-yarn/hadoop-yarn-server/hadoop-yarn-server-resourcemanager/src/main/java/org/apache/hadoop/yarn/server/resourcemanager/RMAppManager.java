@@ -6,9 +6,9 @@
  * to you under the Apache License, Version 2.0 (the
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -17,29 +17,20 @@
  */
 package org.apache.hadoop.yarn.server.resourcemanager;
 
-import java.util.Collections;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.TreeSet;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
-
-import org.apache.hadoop.yarn.api.records.Container;
-import org.apache.hadoop.yarn.api.records.NodeId;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.ipc.Server;
 import org.apache.hadoop.security.AccessControlException;
 import org.apache.hadoop.security.UserGroupInformation;
+import org.apache.hadoop.thirdparty.com.google.common.annotations.VisibleForTesting;
+import org.apache.hadoop.thirdparty.com.google.common.util.concurrent.SettableFuture;
 import org.apache.hadoop.util.StringUtils;
 import org.apache.hadoop.yarn.api.records.ApplicationId;
 import org.apache.hadoop.yarn.api.records.ApplicationSubmissionContext;
 import org.apache.hadoop.yarn.api.records.ApplicationTimeoutType;
+import org.apache.hadoop.yarn.api.records.Container;
 import org.apache.hadoop.yarn.api.records.ExecutionType;
 import org.apache.hadoop.yarn.api.records.ExecutionTypeRequest;
+import org.apache.hadoop.yarn.api.records.NodeId;
 import org.apache.hadoop.yarn.api.records.Priority;
 import org.apache.hadoop.yarn.api.records.QueueACL;
 import org.apache.hadoop.yarn.api.records.Resource;
@@ -52,9 +43,7 @@ import org.apache.hadoop.yarn.ipc.RPCUtil;
 import org.apache.hadoop.yarn.security.AccessRequest;
 import org.apache.hadoop.yarn.security.YarnAuthorizationProvider;
 import org.apache.hadoop.yarn.server.resourcemanager.RMAuditLogger.AuditConstants;
-
-import org.apache.hadoop.yarn.server.resourcemanager.placement
-    .ApplicationPlacementContext;
+import org.apache.hadoop.yarn.server.resourcemanager.placement.ApplicationPlacementContext;
 import org.apache.hadoop.yarn.server.resourcemanager.placement.PlacementManager;
 import org.apache.hadoop.yarn.server.resourcemanager.recovery.RMStateStore;
 import org.apache.hadoop.yarn.server.resourcemanager.recovery.RMStateStore.RMState;
@@ -66,9 +55,9 @@ import org.apache.hadoop.yarn.server.resourcemanager.rmapp.RMAppEventType;
 import org.apache.hadoop.yarn.server.resourcemanager.rmapp.RMAppImpl;
 import org.apache.hadoop.yarn.server.resourcemanager.rmapp.RMAppMetrics;
 import org.apache.hadoop.yarn.server.resourcemanager.rmapp.RMAppRecoverEvent;
+import org.apache.hadoop.yarn.server.resourcemanager.rmapp.RMAppState;
 import org.apache.hadoop.yarn.server.resourcemanager.rmapp.attempt.RMAppAttempt;
 import org.apache.hadoop.yarn.server.resourcemanager.rmapp.attempt.RMAppAttemptImpl;
-import org.apache.hadoop.yarn.server.resourcemanager.rmapp.RMAppState;
 import org.apache.hadoop.yarn.server.resourcemanager.scheduler.SchedulerUtils;
 import org.apache.hadoop.yarn.server.resourcemanager.scheduler.YarnScheduler;
 import org.apache.hadoop.yarn.server.resourcemanager.scheduler.capacity.CSQueue;
@@ -77,17 +66,25 @@ import org.apache.hadoop.yarn.server.resourcemanager.scheduler.fair.FSQueue;
 import org.apache.hadoop.yarn.server.resourcemanager.scheduler.fair.FairScheduler;
 import org.apache.hadoop.yarn.server.security.ApplicationACLsManager;
 import org.apache.hadoop.yarn.server.utils.BuilderUtils;
-import org.apache.hadoop.yarn.util.Times;
-
-import org.apache.hadoop.thirdparty.com.google.common.annotations.VisibleForTesting;
-import org.apache.hadoop.thirdparty.com.google.common.util.concurrent.SettableFuture;
 import org.apache.hadoop.yarn.util.StringHelper;
+import org.apache.hadoop.yarn.util.Times;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.Collections;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 
 /**
- * This class manages the list of applications for the resource manager. 
+ * This class manages the list of applications for the resource manager.
  */
-public class RMAppManager implements EventHandler<RMAppManagerEvent>, 
-                                        Recoverable {
+public class RMAppManager implements EventHandler<RMAppManagerEvent>,
+    Recoverable {
 
   private static final Logger LOG =
       LoggerFactory.getLogger(RMAppManager.class);
@@ -110,8 +107,8 @@ public class RMAppManager implements EventHandler<RMAppManagerEvent>,
   private static final String USER_ID_PREFIX = "userid=";
 
   public RMAppManager(RMContext context,
-      YarnScheduler scheduler, ApplicationMasterService masterService,
-      ApplicationACLsManager applicationACLsManager, Configuration conf) {
+                      YarnScheduler scheduler, ApplicationMasterService masterService,
+                      ApplicationACLsManager applicationACLsManager, Configuration conf) {
     this.rmContext = context;
     this.scheduler = scheduler;
     this.masterService = masterService;
@@ -122,8 +119,8 @@ public class RMAppManager implements EventHandler<RMAppManagerEvent>,
         YarnConfiguration.DEFAULT_RM_MAX_COMPLETED_APPLICATIONS);
     this.maxCompletedAppsInStateStore =
         conf.getInt(
-          YarnConfiguration.RM_STATE_STORE_MAX_COMPLETED_APPLICATIONS,
-          this.maxCompletedAppsInMemory);
+            YarnConfiguration.RM_STATE_STORE_MAX_COMPLETED_APPLICATIONS,
+            this.maxCompletedAppsInMemory);
     if (this.maxCompletedAppsInStateStore > this.maxCompletedAppsInMemory) {
       this.maxCompletedAppsInStateStore = this.maxCompletedAppsInMemory;
     }
@@ -137,7 +134,7 @@ public class RMAppManager implements EventHandler<RMAppManagerEvent>,
   }
 
   /**
-   *  This class is for logging the application summary.
+   * This class is for logging the application summary.
    */
   static class ApplicationSummary {
     static final Logger LOG = LoggerFactory.
@@ -146,7 +143,7 @@ public class RMAppManager implements EventHandler<RMAppManagerEvent>,
     // Escape sequences 
     static final char EQUALS = '=';
     static final char[] charsToEscape =
-      {StringUtils.COMMA, EQUALS, StringUtils.ESCAPE_CHAR};
+        {StringUtils.COMMA, EQUALS, StringUtils.ESCAPE_CHAR};
 
     static class SummaryBuilder {
       final StringBuilder buffer = new StringBuilder();
@@ -158,31 +155,36 @@ public class RMAppManager implements EventHandler<RMAppManagerEvent>,
 
       <T> SummaryBuilder add(String key, T value) {
         String escapedString = StringUtils.escapeString(String.valueOf(value),
-            StringUtils.ESCAPE_CHAR, charsToEscape).replaceAll("\n", "\\\\n")
+                StringUtils.ESCAPE_CHAR, charsToEscape).replaceAll("\n", "\\\\n")
             .replaceAll("\r", "\\\\r");
         return _add(key, escapedString);
       }
 
       SummaryBuilder add(SummaryBuilder summary) {
-        if (buffer.length() > 0) buffer.append(StringUtils.COMMA);
+        if (buffer.length() > 0) {
+          buffer.append(StringUtils.COMMA);
+        }
         buffer.append(summary.buffer);
         return this;
       }
 
       SummaryBuilder _add(String key, String value) {
-        if (buffer.length() > 0) buffer.append(StringUtils.COMMA);
+        if (buffer.length() > 0) {
+          buffer.append(StringUtils.COMMA);
+        }
         buffer.append(key).append(EQUALS).append(value);
         return this;
       }
 
-      @Override public String toString() {
+      @Override
+      public String toString() {
         return buffer.toString();
       }
     }
 
     /**
      * create a summary of the application's runtime.
-     * 
+     *
      * @param app {@link RMApp} whose summary is to be created, cannot
      *            be <code>null</code>.
      */
@@ -238,7 +240,7 @@ public class RMAppManager implements EventHandler<RMAppManagerEvent>,
                   == null
                   ? ""
                   : app.getApplicationSubmissionContext()
-                      .getNodeLabelExpression())
+                  .getNodeLabelExpression())
           .add("diagnostics", app.getDiagnostics())
           .add("totalAllocatedContainers",
               metrics.getTotalAllocatedContainers());
@@ -247,7 +249,7 @@ public class RMAppManager implements EventHandler<RMAppManagerEvent>,
 
     /**
      * Log a summary of the application's runtime.
-     * 
+     *
      * @param app {@link RMApp} whose summary is to be logged
      */
     public static void logAppSummary(RMApp app) {
@@ -274,7 +276,7 @@ public class RMAppManager implements EventHandler<RMAppManagerEvent>,
   }
 
   protected synchronized int getCompletedAppsListSize() {
-    return this.completedApps.size(); 
+    return this.completedApps.size();
   }
 
   protected synchronized void finishApplication(ApplicationId applicationId) {
@@ -285,7 +287,7 @@ public class RMAppManager implements EventHandler<RMAppManagerEvent>,
       if (UserGroupInformation.isSecurityEnabled()) {
         rmContext.getDelegationTokenRenewer().applicationFinished(applicationId);
       }
-      
+
       completedApps.add(applicationId);
       completedAppsInStateStore++;
       writeAuditLog(applicationId);
@@ -297,26 +299,26 @@ public class RMAppManager implements EventHandler<RMAppManagerEvent>,
     String operation = "UNKONWN";
     boolean success = false;
     switch (app.getState()) {
-      case FAILED: 
-        operation = AuditConstants.FINISH_FAILED_APP;
-        break;
-      case FINISHED:
-        operation = AuditConstants.FINISH_SUCCESS_APP;
-        success = true;
-        break;
-      case KILLED: 
-        operation = AuditConstants.FINISH_KILLED_APP;
-        success = true;
-        break;
-      default:
-        break;
+    case FAILED:
+      operation = AuditConstants.FINISH_FAILED_APP;
+      break;
+    case FINISHED:
+      operation = AuditConstants.FINISH_SUCCESS_APP;
+      success = true;
+      break;
+    case KILLED:
+      operation = AuditConstants.FINISH_KILLED_APP;
+      success = true;
+      break;
+    default:
+      break;
     }
-    
+
     if (success) {
       RMAuditLogger.logSuccess(app.getUser(), operation,
           "RMAppManager", app.getApplicationId());
     } else {
-      StringBuilder diag = app.getDiagnostics(); 
+      StringBuilder diag = app.getDiagnostics();
       String msg = diag == null ? null : diag.toString();
       RMAuditLogger.logFailure(app.getUser(), operation, msg, "RMAppManager",
           "App failed with state: " + app.getState(), appId);
@@ -363,23 +365,22 @@ public class RMAppManager implements EventHandler<RMAppManagerEvent>,
 
   @VisibleForTesting
   @SuppressWarnings("unchecked")
-  protected void submitApplication(
-      ApplicationSubmissionContext submissionContext, long submitTime,
-      UserGroupInformation userUgi) throws YarnException {
+  protected void submitApplication(ApplicationSubmissionContext submissionContext,
+                                   long submitTime,
+                                   UserGroupInformation userUgi) throws YarnException {
     ApplicationId applicationId = submissionContext.getApplicationId();
 
-    // Passing start time as -1. It will be eventually set in RMAppImpl
-    // constructor.
+    // Passing start time as -1. It will be eventually set in RMAppImpl constructor.
     RMAppImpl application = createAndPopulateNewRMApp(
         submissionContext, submitTime, userUgi, false, -1, null);
     try {
       if (UserGroupInformation.isSecurityEnabled()) {
-        this.rmContext.getDelegationTokenRenewer()
-            .addApplicationAsync(applicationId,
-                BuilderUtils.parseCredentials(submissionContext),
-                submissionContext.getCancelTokensWhenComplete(),
-                application.getUser(),
-                BuilderUtils.parseTokensConf(submissionContext));
+        this.rmContext.getDelegationTokenRenewer().addApplicationAsync(
+            applicationId,
+            BuilderUtils.parseCredentials(submissionContext),
+            submissionContext.getCancelTokensWhenComplete(),
+            application.getUser(),
+            BuilderUtils.parseTokensConf(submissionContext));
       } else {
         // Dispatcher is not yet started at this time, so these START events
         // enqueued should be guaranteed to be first processed when dispatcher
@@ -400,7 +401,7 @@ public class RMAppManager implements EventHandler<RMAppManagerEvent>,
   }
 
   protected void recoverApplication(ApplicationStateData appState,
-      RMState rmState) throws Exception {
+                                    RMState rmState) throws Exception {
     ApplicationSubmissionContext appContext =
         appState.getApplicationSubmissionContext();
     ApplicationId appId = appContext.getApplicationId();
@@ -424,22 +425,23 @@ public class RMAppManager implements EventHandler<RMAppManagerEvent>,
     application.handle(new RMAppRecoverEvent(appId, rmState));
   }
 
-  private RMAppImpl createAndPopulateNewRMApp(
-      ApplicationSubmissionContext submissionContext, long submitTime,
-      UserGroupInformation userUgi, boolean isRecovery, long startTime,
-      RMAppState recoveredFinalState) throws YarnException {
+  private RMAppImpl createAndPopulateNewRMApp(ApplicationSubmissionContext submissionContext,
+                                              long submitTime,
+                                              UserGroupInformation userUgi,
+                                              boolean isRecovery,
+                                              long startTime,
+                                              RMAppState recoveredFinalState) throws YarnException {
     String user = userUgi.getShortUserName();
 
     ApplicationPlacementContext placementContext = null;
     if (recoveredFinalState == null) {
-      placementContext = placeApplication(rmContext.getQueuePlacementManager(),
-          submissionContext, user, isRecovery);
+      placementContext = placeApplication(
+          rmContext.getQueuePlacementManager(), submissionContext, user, isRecovery);
     }
 
     // We only replace the queue when it's a new application
     if (!isRecovery) {
-      copyPlacementQueueToSubmissionContext(placementContext,
-          submissionContext);
+      copyPlacementQueueToSubmissionContext(placementContext, submissionContext);
 
       // fail the submission if configured application timeout value is invalid
       RMServerUtils.validateApplicationTimeouts(
@@ -447,8 +449,7 @@ public class RMAppManager implements EventHandler<RMAppManagerEvent>,
     }
 
     ApplicationId applicationId = submissionContext.getApplicationId();
-    List<ResourceRequest> amReqs = validateAndCreateResourceRequest(
-        submissionContext, isRecovery);
+    List<ResourceRequest> amReqs = validateAndCreateResourceRequest(submissionContext, isRecovery);
 
     // Verify and get the update application priority and set back to
     // submissionContext
@@ -476,8 +477,7 @@ public class RMAppManager implements EventHandler<RMAppManagerEvent>,
           csqueue = ((CapacityScheduler) scheduler).getQueue(parentQueueName);
         }
 
-        if (csqueue != null
-            && !authorizer.checkPermission(
+        if (csqueue != null && !authorizer.checkPermission(
             new AccessRequest(csqueue.getPrivilegedEntity(), userUgi,
                 SchedulerUtils.toAccessType(QueueACL.SUBMIT_APPLICATIONS),
                 applicationId.toString(), appName, Server.getRemoteAddress(),
@@ -521,19 +521,26 @@ public class RMAppManager implements EventHandler<RMAppManagerEvent>,
     }
 
     // Create RMApp
-    RMAppImpl application =
-        new RMAppImpl(applicationId, rmContext, this.conf,
-            submissionContext.getApplicationName(), userUgi,
-            submissionContext.getQueue(),
-            submissionContext, this.scheduler, this.masterService,
-            submitTime, submissionContext.getApplicationType(),
-            submissionContext.getApplicationTags(), amReqs, placementContext,
-            startTime);
+    RMAppImpl application = new RMAppImpl(
+        applicationId,
+        rmContext,
+        this.conf,
+        submissionContext.getApplicationName(),
+        userUgi,
+        submissionContext.getQueue(),
+        submissionContext,
+        this.scheduler,
+        this.masterService,
+        submitTime,
+        submissionContext.getApplicationType(),
+        submissionContext.getApplicationTags(),
+        amReqs,
+        placementContext,
+        startTime);
     // Concurrent app submissions with same applicationId will fail here
-    // Concurrent app submissions with different applicationIds will not
-    // influence each other
-    if (rmContext.getRMApps().putIfAbsent(applicationId, application) !=
-        null) {
+    // Concurrent app submissions with different applicationIds will not influence each other
+    // 将 RMApp 对象记录到 RM 上下文中
+    if (rmContext.getRMApps().putIfAbsent(applicationId, application) != null) {
       String message = "Application with id " + applicationId
           + " is already present! Cannot add a duplicate!";
       LOG.warn(message);
@@ -545,8 +552,10 @@ public class RMAppManager implements EventHandler<RMAppManagerEvent>,
       application.startTimelineCollector();
     }
     // Inform the ACLs Manager
-    this.applicationACLsManager.addApplication(applicationId,
-        submissionContext.getAMContainerSpec().getApplicationACLs());
+    this.applicationACLsManager.addApplication(
+        applicationId,
+        submissionContext.getAMContainerSpec().getApplicationACLs()
+    );
     return application;
   }
 
@@ -655,7 +664,7 @@ public class RMAppManager implements EventHandler<RMAppManagerEvent>,
         count += 1;
       }
     } finally {
-      LOG.info("Successfully recovered " + count  + " out of "
+      LOG.info("Successfully recovered " + count + " out of "
           + appStates.size() + " applications");
     }
   }
@@ -666,12 +675,12 @@ public class RMAppManager implements EventHandler<RMAppManagerEvent>,
     LOG.debug("RMAppManager processing event for {} of type {}",
         applicationId, event.getType());
     switch (event.getType()) {
-    case APP_COMPLETED :
+    case APP_COMPLETED:
       finishApplication(applicationId);
       logApplicationSummary(applicationId);
       checkAppNumCompletedLimit();
       break;
-    case APP_MOVE :
+    case APP_MOVE:
       // moveAllApps from scheduler will fire this event for each of
       // those applications which needed to be moved to a new queue.
       // Use the standard move application api to do the same.
@@ -682,14 +691,14 @@ public class RMAppManager implements EventHandler<RMAppManagerEvent>,
         LOG.warn("Move Application has failed: " + e.getMessage());
       }
       break;
-    default :
+    default:
       LOG.error("Invalid eventtype " + event.getType() + ". Ignoring!");
     }
   }
 
   // transaction method.
   public Map<ApplicationTimeoutType, String> updateApplicationTimeout(RMApp app,
-      Map<ApplicationTimeoutType, String> newTimeoutInISO8601Format)
+                                                                      Map<ApplicationTimeoutType, String> newTimeoutInISO8601Format)
       throws YarnException {
     ApplicationId applicationId = app.getApplicationId();
     synchronized (applicationId) {
@@ -754,13 +763,14 @@ public class RMAppManager implements EventHandler<RMAppManagerEvent>,
   /**
    * updateApplicationPriority will invoke scheduler api to update the
    * new priority to RM and StateStore.
-   * @param callerUGI user
-   * @param applicationId Application Id
+   *
+   * @param callerUGI      user
+   * @param applicationId  Application Id
    * @param newAppPriority proposed new application priority
    * @throws YarnException Handle exceptions
    */
   public void updateApplicationPriority(UserGroupInformation callerUGI,
-      ApplicationId applicationId, Priority newAppPriority)
+                                        ApplicationId applicationId, Priority newAppPriority)
       throws YarnException {
     RMApp app = this.rmContext.getRMApps().get(applicationId);
 
@@ -795,12 +805,9 @@ public class RMAppManager implements EventHandler<RMAppManagerEvent>,
   /**
    * moveToQueue will invoke scheduler api to perform move queue operation.
    *
-   * @param applicationId
-   *          Application Id.
-   * @param targetQueue
-   *          Target queue to which this app has to be moved.
-   * @throws YarnException
-   *           Handle exceptions.
+   * @param applicationId Application Id.
+   * @param targetQueue   Target queue to which this app has to be moved.
+   * @throws YarnException Handle exceptions.
    */
   public void moveApplicationAcrossQueue(ApplicationId applicationId, String targetQueue)
       throws YarnException {
@@ -848,7 +855,7 @@ public class RMAppManager implements EventHandler<RMAppManagerEvent>,
   }
 
   private void updateAppDataToStateStore(String queue, RMApp app,
-      boolean toSuppressException) throws YarnException {
+                                         boolean toSuppressException) throws YarnException {
     // Create a future object to capture exceptions from StateStore.
     SettableFuture<Object> future = SettableFuture.create();
 
@@ -884,9 +891,9 @@ public class RMAppManager implements EventHandler<RMAppManagerEvent>,
     if (placementManager != null) {
       try {
         String usernameUsedForPlacement =
-                getUserNameForPlacement(user, context, placementManager);
+            getUserNameForPlacement(user, context, placementManager);
         placementContext = placementManager
-                .placeApplication(context, usernameUsedForPlacement);
+            .placeApplication(context, usernameUsedForPlacement);
       } catch (YarnException e) {
         // Placement could also fail if the user doesn't exist in system
         // skip if the user is not found during recovery.
@@ -915,19 +922,20 @@ public class RMAppManager implements EventHandler<RMAppManagerEvent>,
 
   @VisibleForTesting
   protected String getUserNameForPlacement(final String user,
-      final ApplicationSubmissionContext context,
-      final PlacementManager placementManager) throws YarnException {
+                                           final ApplicationSubmissionContext context,
+                                           final PlacementManager placementManager)
+      throws YarnException {
 
     boolean applicationTagBasedPlacementEnabled = conf
         .getBoolean(YarnConfiguration.APPLICATION_TAG_BASED_PLACEMENT_ENABLED,
-        YarnConfiguration.DEFAULT_APPLICATION_TAG_BASED_PLACEMENT_ENABLED);
+            YarnConfiguration.DEFAULT_APPLICATION_TAG_BASED_PLACEMENT_ENABLED);
     String usernameUsedForPlacement = user;
     if (!applicationTagBasedPlacementEnabled) {
       return usernameUsedForPlacement;
     }
     if (!isWhitelistedUser(user, conf)) {
       LOG.warn("User '{}' is not allowed to do placement based " +
-              "on application tag", user);
+          "on application tag", user);
       return usernameUsedForPlacement;
     }
     LOG.debug("Application tag based placement is enabled, checking for " +
@@ -937,11 +945,11 @@ public class RMAppManager implements EventHandler<RMAppManagerEvent>,
     if (userNameFromAppTag != null) {
       LOG.debug("Found 'userid' '{}' in application tag", userNameFromAppTag);
       UserGroupInformation callerUGI = UserGroupInformation
-              .createRemoteUser(user);
+          .createRemoteUser(user);
       // check if the actual user has rights to submit application to the
       // user's queue from the application tag
       ApplicationPlacementContext appPlacementContext = placementManager
-              .placeApplication(context, userNameFromAppTag);
+          .placeApplication(context, userNameFromAppTag);
       if (appPlacementContext == null) {
         LOG.warn("No rule was found for user '{}'", userNameFromAppTag);
         return usernameUsedForPlacement;
@@ -952,12 +960,12 @@ public class RMAppManager implements EventHandler<RMAppManagerEvent>,
         queue = parent + "." + queue;
       }
       if (callerUGI != null && scheduler
-              .checkAccess(callerUGI, QueueACL.SUBMIT_APPLICATIONS, queue)) {
+          .checkAccess(callerUGI, QueueACL.SUBMIT_APPLICATIONS, queue)) {
         usernameUsedForPlacement = userNameFromAppTag;
       } else {
         LOG.warn("Proxy user '{}' from application tag does not have access to " +
                 " queue '{}'. " + "The placement is done for user '{}'",
-                userNameFromAppTag, queue, user);
+            userNameFromAppTag, queue, user);
       }
     } else {
       LOG.warn("'userid' was not found in application tags");
@@ -968,11 +976,11 @@ public class RMAppManager implements EventHandler<RMAppManagerEvent>,
   private boolean isWhitelistedUser(final String user,
                                     final Configuration config) {
     String[] userWhitelist = config.getStrings(YarnConfiguration
-            .APPLICATION_TAG_BASED_PLACEMENT_USER_WHITELIST);
+        .APPLICATION_TAG_BASED_PLACEMENT_USER_WHITELIST);
     if (userWhitelist == null || userWhitelist.length == 0) {
       return false;
     }
-    for (String s: userWhitelist) {
+    for (String s : userWhitelist) {
       if (s.equals(user)) {
         return true;
       }
@@ -981,7 +989,7 @@ public class RMAppManager implements EventHandler<RMAppManagerEvent>,
   }
 
   private String getUserNameFromApplicationTag(Set<String> applicationTags) {
-    for (String tag: applicationTags) {
+    for (String tag : applicationTags) {
       if (tag.startsWith(USER_ID_PREFIX)) {
         String[] userIdTag = tag.split("=");
         if (userIdTag.length == 2) {

@@ -1,33 +1,23 @@
 /**
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*     http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 package org.apache.hadoop.yarn.server.resourcemanager.amlauncher;
 
-import java.io.IOException;
-import java.net.InetSocketAddress;
-import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.apache.hadoop.classification.InterfaceAudience.Private;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.io.DataInputByteBuffer;
@@ -37,6 +27,7 @@ import org.apache.hadoop.security.Credentials;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.security.token.SecretManager.InvalidToken;
 import org.apache.hadoop.security.token.Token;
+import org.apache.hadoop.thirdparty.com.google.common.annotations.VisibleForTesting;
 import org.apache.hadoop.util.StringUtils;
 import org.apache.hadoop.yarn.api.ApplicationConstants;
 import org.apache.hadoop.yarn.api.ContainerManagementProtocol;
@@ -67,16 +58,23 @@ import org.apache.hadoop.yarn.server.security.AMSecretKeys;
 import org.apache.hadoop.yarn.server.webproxy.ProxyCA;
 import org.apache.hadoop.yarn.util.ConverterUtils;
 import org.apache.hadoop.yarn.util.timeline.TimelineUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import org.apache.hadoop.thirdparty.com.google.common.annotations.VisibleForTesting;
+import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 
 /**
  * The launch of the AM itself.
  */
 public class AMLauncher implements Runnable {
 
-  private static final Logger LOG =
-      LoggerFactory.getLogger(AMLauncher.class);
+  private static final Logger LOG = LoggerFactory.getLogger(AMLauncher.class);
 
   private ContainerManagementProtocol containerMgrProxy;
 
@@ -90,16 +88,17 @@ public class AMLauncher implements Runnable {
   @SuppressWarnings("rawtypes")
   private final EventHandler handler;
 
-  public AMLauncher(RMContext rmContext, RMAppAttempt application,
-      AMLauncherEventType eventType, Configuration conf) {
+  public AMLauncher(RMContext rmContext,
+                    RMAppAttempt application,
+                    AMLauncherEventType eventType,
+                    Configuration conf) {
     this.application = application;
     this.conf = conf;
     this.eventType = eventType;
     this.rmContext = rmContext;
     this.handler = rmContext.getDispatcher().getEventHandler();
     this.masterContainer = application.getMasterContainer();
-    this.timelineServiceV2Enabled = YarnConfiguration.
-        timelineServiceV2Enabled(conf);
+    this.timelineServiceV2Enabled = YarnConfiguration.timelineServiceV2Enabled(conf);
   }
 
   private void connect() throws IOException {
@@ -111,43 +110,38 @@ public class AMLauncher implements Runnable {
   private void launch() throws IOException, YarnException {
     connect();
     ContainerId masterContainerID = masterContainer.getId();
-    ApplicationSubmissionContext applicationContext =
-        application.getSubmissionContext();
-    LOG.info("Setting up container " + masterContainer
-        + " for AM " + application.getAppAttemptId());
+    ApplicationSubmissionContext applicationContext = application.getSubmissionContext();
+    LOG.info("Setting up container {} for AM {}", masterContainer, application.getAppAttemptId());
     ContainerLaunchContext launchContext =
         createAMContainerLaunchContext(applicationContext, masterContainerID);
 
     StartContainerRequest scRequest =
-        StartContainerRequest.newInstance(launchContext,
-          masterContainer.getContainerToken());
-    List<StartContainerRequest> list = new ArrayList<StartContainerRequest>();
+        StartContainerRequest.newInstance(launchContext, masterContainer.getContainerToken());
+    List<StartContainerRequest> list = new ArrayList<>();
     list.add(scRequest);
-    StartContainersRequest allRequests =
-        StartContainersRequest.newInstance(list);
+    StartContainersRequest allRequests = StartContainersRequest.newInstance(list);
 
+    LOG.info("Send start containers request to {}", masterContainer.getNodeId());
     StartContainersResponse response =
         containerMgrProxy.startContainers(allRequests);
     if (response.getFailedRequests() != null
         && response.getFailedRequests().containsKey(masterContainerID)) {
-      Throwable t =
-          response.getFailedRequests().get(masterContainerID).deSerialize();
+      Throwable t = response.getFailedRequests().get(masterContainerID).deSerialize();
       parseAndThrowException(t);
     } else {
-      LOG.info("Done launching container " + masterContainer + " for AM "
-          + application.getAppAttemptId());
+      LOG.info("Finish launching container {} for AM {}",
+          masterContainer, application.getAppAttemptId());
     }
   }
 
   private void cleanup() throws IOException, YarnException {
     connect();
     ContainerId containerId = masterContainer.getId();
-    List<ContainerId> containerIds = new ArrayList<ContainerId>();
+    List<ContainerId> containerIds = new ArrayList<>();
     containerIds.add(containerId);
-    StopContainersRequest stopRequest =
-        StopContainersRequest.newInstance(containerIds);
-    StopContainersResponse response =
-        containerMgrProxy.stopContainers(stopRequest);
+    StopContainersRequest stopRequest = StopContainersRequest.newInstance(containerIds);
+    LOG.info("Send stop containers request to {}", masterContainer.getNodeId());
+    StopContainersResponse response = containerMgrProxy.stopContainers(stopRequest);
     if (response.getFailedRequests() != null
         && response.getFailedRequests().containsKey(containerId)) {
       Throwable t = response.getFailedRequests().get(containerId).deSerialize();
@@ -196,9 +190,8 @@ public class AMLauncher implements Runnable {
     ContainerLaunchContext container =
         applicationMasterContext.getAMContainerSpec();
 
-    if (container == null){
-      throw new IOException(containerID +
-            " has been cleaned before launched");
+    if (container == null) {
+      throw new IOException(containerID + " has been cleaned before launched");
     }
     // Finalize the container
     setupTokens(container, containerID);
@@ -327,8 +320,8 @@ public class AMLauncher implements Runnable {
   protected Token<AMRMTokenIdentifier> createAndSetAMRMToken() {
     Token<AMRMTokenIdentifier> amrmToken =
         this.rmContext.getAMRMTokenSecretManager().createAndGetAMRMToken(
-          application.getAppAttemptId());
-    ((RMAppAttemptImpl)application).setAMRMToken(amrmToken);
+            application.getAppAttemptId());
+    ((RMAppAttemptImpl) application).setAMRMToken(amrmToken);
     return amrmToken;
   }
 
@@ -337,19 +330,21 @@ public class AMLauncher implements Runnable {
     switch (eventType) {
     case LAUNCH:
       try {
-        LOG.info("Launching master" + application.getAppAttemptId());
+        LOG.info("Launching application master {}", application.getAppAttemptId());
         launch();
-        handler.handle(new RMAppAttemptEvent(application.getAppAttemptId(),
-            RMAppAttemptEventType.LAUNCHED, System.currentTimeMillis()));
-      } catch(Exception ie) {
+        handler.handle(new RMAppAttemptEvent(
+            application.getAppAttemptId(),
+            RMAppAttemptEventType.LAUNCHED, System.currentTimeMillis())
+        );
+      } catch (Exception ie) {
         onAMLaunchFailed(masterContainer.getId(), ie);
       }
       break;
     case CLEANUP:
       try {
-        LOG.info("Cleaning master " + application.getAppAttemptId());
+        LOG.info("Cleaning application master {}", application.getAppAttemptId());
         cleanup();
-      } catch(IOException ie) {
+      } catch (IOException ie) {
         LOG.info("Error cleaning master ", ie);
       } catch (YarnException e) {
         StringBuilder sb = new StringBuilder("Container ");
@@ -381,9 +376,9 @@ public class AMLauncher implements Runnable {
   @SuppressWarnings("unchecked")
   protected void onAMLaunchFailed(ContainerId containerId, Exception ie) {
     String message = "Error launching " + application.getAppAttemptId()
-            + ". Got exception: " + StringUtils.stringifyException(ie);
+        + ". Got exception: " + StringUtils.stringifyException(ie);
     LOG.info(message);
     handler.handle(new RMAppAttemptEvent(application
-           .getAppAttemptId(), RMAppAttemptEventType.LAUNCH_FAILED, message));
+        .getAppAttemptId(), RMAppAttemptEventType.LAUNCH_FAILED, message));
   }
 }

@@ -18,10 +18,10 @@
 package org.apache.hadoop.yarn.server.nodemanager.containermanager.localizer.event;
 
 import org.apache.hadoop.yarn.event.AbstractEvent;
-import org.apache.hadoop.yarn.server.nodemanager.containermanager.localizer.ResourceLocalizationService;
+import org.apache.hadoop.yarn.server.nodemanager.containermanager.localizer.AbstractResourceLocalizationService;
 
 /**
- * Events delivered to the {@link ResourceLocalizationService}
+ * Events delivered to the {@link AbstractResourceLocalizationService}
  */
 public class LocalizerEvent extends AbstractEvent<LocalizerEventType> {
 

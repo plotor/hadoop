@@ -17,24 +17,22 @@
  */
 package org.apache.hadoop.util;
 
+import org.apache.hadoop.classification.InterfaceAudience;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.service.AbstractService;
+import org.apache.hadoop.thirdparty.com.google.common.base.Joiner;
+import org.apache.hadoop.thirdparty.com.google.common.collect.Lists;
+import org.apache.hadoop.thirdparty.com.google.common.collect.Maps;
+import org.apache.hadoop.thirdparty.com.google.common.collect.Sets;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.lang.management.GarbageCollectorMXBean;
 import java.lang.management.ManagementFactory;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
-
-import org.apache.hadoop.classification.InterfaceAudience;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.service.AbstractService;
-
-import org.apache.hadoop.thirdparty.com.google.common.base.Joiner;
-import org.apache.hadoop.thirdparty.com.google.common.base.Preconditions;
-import org.apache.hadoop.thirdparty.com.google.common.collect.Lists;
-import org.apache.hadoop.thirdparty.com.google.common.collect.Maps;
-import org.apache.hadoop.thirdparty.com.google.common.collect.Sets;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Class which sets up a simple thread which runs in a loop sleeping
@@ -48,16 +46,22 @@ public class JvmPauseMonitor extends AbstractService {
   private static final Logger LOG = LoggerFactory.getLogger(
       JvmPauseMonitor.class);
 
-  /** The target sleep time */
+  /**
+   * The target sleep time
+   */
   private static final long SLEEP_INTERVAL_MS = 500;
 
-  /** log WARN if we detect a pause longer than this threshold */
+  /**
+   * log WARN if we detect a pause longer than this threshold
+   */
   private long warnThresholdMs;
   private static final String WARN_THRESHOLD_KEY =
       "jvm.pause.warn-threshold.ms";
   private static final long WARN_THRESHOLD_DEFAULT = 10000;
 
-  /** log INFO if we detect a pause longer than this threshold */
+  /**
+   * log INFO if we detect a pause longer than this threshold
+   */
   private long infoThresholdMs;
   private static final String INFO_THRESHOLD_KEY =
       "jvm.pause.info-threshold.ms";
@@ -109,19 +113,19 @@ public class JvmPauseMonitor extends AbstractService {
   public long getNumGcWarnThresholdExceeded() {
     return numGcWarnThresholdExceeded;
   }
-  
+
   public long getNumGcInfoThresholdExceeded() {
     return numGcInfoThresholdExceeded;
   }
-  
+
   public long getTotalGcExtraSleepTime() {
     return totalGcExtraSleepTime;
   }
-  
+
   private String formatMessage(long extraSleepTime,
-      Map<String, GcTimes> gcTimesAfterSleep,
-      Map<String, GcTimes> gcTimesBeforeSleep) {
-    
+                               Map<String, GcTimes> gcTimesAfterSleep,
+                               Map<String, GcTimes> gcTimesBeforeSleep) {
+
     Set<String> gcBeanNames = Sets.intersection(
         gcTimesAfterSleep.keySet(),
         gcTimesBeforeSleep.keySet());
@@ -134,7 +138,7 @@ public class JvmPauseMonitor extends AbstractService {
             diff.toString());
       }
     }
-    
+
     String ret = "Detected pause in JVM or host machine (eg GC): " +
         "pause of approximately " + extraSleepTime + "ms\n";
     if (gcDiffs.isEmpty()) {
@@ -144,7 +148,7 @@ public class JvmPauseMonitor extends AbstractService {
     }
     return ret;
   }
-  
+
   private Map<String, GcTimes> getGcTimes() {
     Map<String, GcTimes> map = Maps.newHashMap();
     List<GarbageCollectorMXBean> gcBeans =
@@ -154,13 +158,13 @@ public class JvmPauseMonitor extends AbstractService {
     }
     return map;
   }
-  
+
   private static class GcTimes {
     private GcTimes(GarbageCollectorMXBean gcBean) {
       gcCount = gcBean.getCollectionCount();
       gcTimeMillis = gcBean.getCollectionTime();
     }
-    
+
     private GcTimes(long count, long time) {
       this.gcCount = count;
       this.gcTimeMillis = time;
@@ -170,12 +174,12 @@ public class JvmPauseMonitor extends AbstractService {
       return new GcTimes(this.gcCount - other.gcCount,
           this.gcTimeMillis - other.gcTimeMillis);
     }
-    
+
     @Override
     public String toString() {
       return "count=" + gcCount + " time=" + gcTimeMillis + "ms";
     }
-    
+
     private long gcCount;
     private long gcTimeMillis;
   }
@@ -198,22 +202,20 @@ public class JvmPauseMonitor extends AbstractService {
 
         if (extraSleepTime > warnThresholdMs) {
           ++numGcWarnThresholdExceeded;
-          LOG.warn(formatMessage(
-              extraSleepTime, gcTimesAfterSleep, gcTimesBeforeSleep));
+          LOG.debug(formatMessage(extraSleepTime, gcTimesAfterSleep, gcTimesBeforeSleep));
         } else if (extraSleepTime > infoThresholdMs) {
           ++numGcInfoThresholdExceeded;
-          LOG.info(formatMessage(
-              extraSleepTime, gcTimesAfterSleep, gcTimesBeforeSleep));
+          LOG.debug(formatMessage(extraSleepTime, gcTimesAfterSleep, gcTimesBeforeSleep));
         }
         totalGcExtraSleepTime += extraSleepTime;
         gcTimesBeforeSleep = gcTimesAfterSleep;
       }
     }
   }
-  
+
   /**
    * Simple 'main' to facilitate manual testing of the pause monitor.
-   * 
+   * <p>
    * This main function just leaks memory into a list. Running this class
    * with a 1GB heap will very quickly go into "GC hell" and result in
    * log messages about the GC pauses.
@@ -222,7 +224,7 @@ public class JvmPauseMonitor extends AbstractService {
    * @throws Exception Exception.
    */
   @SuppressWarnings("resource")
-  public static void main(String []args) throws Exception {
+  public static void main(String[] args) throws Exception {
     JvmPauseMonitor monitor = new JvmPauseMonitor();
     monitor.init(new Configuration());
     monitor.start();

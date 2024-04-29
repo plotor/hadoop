@@ -1,25 +1,35 @@
 /**
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*     http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 package org.apache.hadoop.yarn.server.nodemanager;
 
-import static java.util.concurrent.TimeUnit.SECONDS;
-
+import org.apache.hadoop.classification.InterfaceAudience.Private;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.service.AbstractService;
+import org.apache.hadoop.thirdparty.com.google.common.util.concurrent.ThreadFactoryBuilder;
+import org.apache.hadoop.util.concurrent.HadoopScheduledThreadPoolExecutor;
+import org.apache.hadoop.yarn.conf.YarnConfiguration;
+import org.apache.hadoop.yarn.proto.YarnServerNodemanagerRecoveryProtos.DeletionServiceDeleteTaskProto;
+import org.apache.hadoop.yarn.server.nodemanager.api.impl.pb.NMProtoUtils;
+import org.apache.hadoop.yarn.server.nodemanager.containermanager.deletion.recovery.DeletionTaskRecoveryInfo;
+import org.apache.hadoop.yarn.server.nodemanager.containermanager.deletion.task.DeletionTask;
+import org.apache.hadoop.yarn.server.nodemanager.recovery.NMNullStateStoreService;
+import org.apache.hadoop.yarn.server.nodemanager.recovery.NMStateStoreService;
 import org.apache.hadoop.yarn.server.nodemanager.recovery.RecoveryIterator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,24 +44,12 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import org.apache.hadoop.classification.InterfaceAudience.Private;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.service.AbstractService;
-import org.apache.hadoop.util.concurrent.HadoopScheduledThreadPoolExecutor;
-import org.apache.hadoop.yarn.conf.YarnConfiguration;
-import org.apache.hadoop.yarn.proto.YarnServerNodemanagerRecoveryProtos.DeletionServiceDeleteTaskProto;
-import org.apache.hadoop.yarn.server.nodemanager.api.impl.pb.NMProtoUtils;
-import org.apache.hadoop.yarn.server.nodemanager.containermanager.deletion.recovery.DeletionTaskRecoveryInfo;
-import org.apache.hadoop.yarn.server.nodemanager.containermanager.deletion.task.DeletionTask;
-import org.apache.hadoop.yarn.server.nodemanager.recovery.NMNullStateStoreService;
-import org.apache.hadoop.yarn.server.nodemanager.recovery.NMStateStoreService;
-
-import org.apache.hadoop.thirdparty.com.google.common.util.concurrent.ThreadFactoryBuilder;
+import static java.util.concurrent.TimeUnit.SECONDS;
 
 public class DeletionService extends AbstractService {
 
   private static final Logger LOG =
-       LoggerFactory.getLogger(DeletionService.class);
+      LoggerFactory.getLogger(DeletionService.class);
 
   private int debugDelay;
   private final ContainerExecutor containerExecutor;
@@ -64,7 +62,7 @@ public class DeletionService extends AbstractService {
   }
 
   public DeletionService(ContainerExecutor containerExecutor,
-      NMStateStoreService stateStore) {
+                         NMStateStoreService stateStore) {
     super(DeletionService.class.getName());
     this.containerExecutor = containerExecutor;
     this.debugDelay = 0;
@@ -85,8 +83,7 @@ public class DeletionService extends AbstractService {
 
   public void delete(DeletionTask deletionTask) {
     if (debugDelay != -1) {
-      LOG.debug("Scheduling DeletionTask (delay {}) : {}", debugDelay,
-          deletionTask);
+      LOG.debug("Scheduling DeletionTask (delay {}) : {}", debugDelay, deletionTask);
       recordDeletionTaskInStateStore(deletionTask);
       sched.schedule(deletionTask, debugDelay, TimeUnit.SECONDS);
     }
@@ -114,7 +111,7 @@ public class DeletionService extends AbstractService {
     // have no predecessors
     final long now = System.currentTimeMillis();
     for (DeletionTaskRecoveryInfo info : idToInfoMap.values()) {
-      for (Integer successorId : info.getSuccessorTaskIds()){
+      for (Integer successorId : info.getSuccessorTaskIds()) {
         DeletionTaskRecoveryInfo successor = idToInfoMap.get(successorId);
         if (successor != null) {
           info.getTask().addDeletionTaskDependency(successor.getTask());
@@ -193,7 +190,8 @@ public class DeletionService extends AbstractService {
       boolean terminated = false;
       try {
         terminated = sched.awaitTermination(10, SECONDS);
-      } catch (InterruptedException e) { }
+      } catch (InterruptedException e) {
+      }
       if (!terminated) {
         sched.shutdownNow();
       }

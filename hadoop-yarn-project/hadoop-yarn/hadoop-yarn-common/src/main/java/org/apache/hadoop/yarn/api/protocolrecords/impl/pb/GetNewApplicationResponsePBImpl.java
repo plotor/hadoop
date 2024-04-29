@@ -37,6 +37,7 @@ import org.apache.hadoop.thirdparty.protobuf.TextFormat;
 @Private
 @Unstable
 public class GetNewApplicationResponsePBImpl extends GetNewApplicationResponse {
+
   GetNewApplicationResponseProto proto = GetNewApplicationResponseProto.getDefaultInstance();
   GetNewApplicationResponseProto.Builder builder = null;
   boolean viaProto = false;

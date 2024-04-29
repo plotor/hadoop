@@ -114,7 +114,7 @@ import org.apache.hadoop.yarn.server.nodemanager.containermanager.launcher.Conta
 import org.apache.hadoop.yarn.server.nodemanager.containermanager.linux.privileged.PrivilegedOperationExecutor;
 import org.apache.hadoop.yarn.server.nodemanager.containermanager.linux.runtime.DockerLinuxContainerRuntime;
 import org.apache.hadoop.yarn.server.nodemanager.containermanager.localizer.ContainerLocalizer;
-import org.apache.hadoop.yarn.server.nodemanager.containermanager.localizer.ResourceLocalizationService;
+import org.apache.hadoop.yarn.server.nodemanager.containermanager.localizer.AbstractResourceLocalizationService;
 import org.apache.hadoop.yarn.server.nodemanager.executor.ContainerStartContext;
 import org.apache.hadoop.yarn.server.nodemanager.recovery.NMNullStateStoreService;
 import org.apache.hadoop.yarn.server.nodemanager.security.NMContainerTokenSecretManager;
@@ -2599,7 +2599,7 @@ public class TestContainerLaunch extends BaseContainerManagerTest {
     verify(containerExecutor, times(1)).launchContainer(cscArgument.capture());
     ContainerStartContext csc = cscArgument.getValue();
     Path nmPrivate = dirsHandler.getLocalPathForWrite(
-        ResourceLocalizationService.NM_PRIVATE_DIR + Path.SEPARATOR +
+        AbstractResourceLocalizationService.NM_PRIVATE_DIR + Path.SEPARATOR +
             appId.toString() + Path.SEPARATOR + id.toString());
     Assert.assertEquals(new Path(nmPrivate, ContainerLaunch.CONTAINER_SCRIPT),
         csc.getNmPrivateContainerScriptPath());

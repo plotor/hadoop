@@ -1,39 +1,23 @@
 /**
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*     http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 package org.apache.hadoop.yarn.server.nodemanager;
 
-import static org.apache.hadoop.fs.CreateFlag.CREATE;
-import static org.apache.hadoop.fs.CreateFlag.OVERWRITE;
-
-import org.apache.hadoop.thirdparty.com.google.common.annotations.VisibleForTesting;
-import java.io.DataOutputStream;
-import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.IOException;
-import java.io.PrintStream;
-import java.net.InetSocketAddress;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.EnumSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
 import org.apache.commons.lang3.RandomUtils;
 import org.apache.hadoop.classification.InterfaceAudience.Private;
 import org.apache.hadoop.fs.FileContext;
@@ -43,6 +27,7 @@ import org.apache.hadoop.fs.UnsupportedFileSystemException;
 import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.hadoop.hdfs.protocol.datatransfer.IOStreamPair;
 import org.apache.hadoop.service.ServiceStateException;
+import org.apache.hadoop.thirdparty.com.google.common.annotations.VisibleForTesting;
 import org.apache.hadoop.util.Shell;
 import org.apache.hadoop.util.Shell.CommandExecutor;
 import org.apache.hadoop.util.Shell.ExitCodeException;
@@ -57,15 +42,16 @@ import org.apache.hadoop.yarn.server.nodemanager.containermanager.container.Cont
 import org.apache.hadoop.yarn.server.nodemanager.containermanager.launcher.ContainerLaunch;
 import org.apache.hadoop.yarn.server.nodemanager.containermanager.localizer.ContainerLocalizer;
 import org.apache.hadoop.yarn.server.nodemanager.containermanager.runtime.ContainerExecutionException;
-import org.apache.hadoop.yarn.server.nodemanager.executor.ContainerExecContext;
-import org.apache.hadoop.yarn.server.nodemanager.executor.ContainerLivenessContext;
-import org.apache.hadoop.yarn.server.nodemanager.executor.ContainerReapContext;
-import org.apache.hadoop.yarn.server.nodemanager.executor.ContainerSignalContext;
-import org.apache.hadoop.yarn.server.nodemanager.executor.ContainerStartContext;
-import org.apache.hadoop.yarn.server.nodemanager.executor.DeletionAsUserContext;
-import org.apache.hadoop.yarn.server.nodemanager.executor.LocalizerStartContext;
+import org.apache.hadoop.yarn.server.nodemanager.executor.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.io.*;
+import java.net.InetSocketAddress;
+import java.util.*;
+
+import static org.apache.hadoop.fs.CreateFlag.CREATE;
+import static org.apache.hadoop.fs.CreateFlag.OVERWRITE;
 
 /**
  * The {@code DefaultContainerExecuter} class offers generic container
@@ -75,7 +61,7 @@ import org.slf4j.LoggerFactory;
 public class DefaultContainerExecutor extends ContainerExecutor {
 
   private static final Logger LOG =
-       LoggerFactory.getLogger(DefaultContainerExecutor.class);
+      LoggerFactory.getLogger(DefaultContainerExecutor.class);
 
   private static final int WIN_MAX_PATH = 260;
 
@@ -110,23 +96,23 @@ public class DefaultContainerExecutor extends ContainerExecutor {
   /**
    * Copy a file using the {@link #lfs} {@link FileContext}.
    *
-   * @param src the file to copy
-   * @param dst where to copy the file
+   * @param src   the file to copy
+   * @param dst   where to copy the file
    * @param owner the owner of the new copy. Used only in secure Windows
-   * clusters
+   *              clusters
    * @throws IOException when the copy fails
    * @see WindowsSecureContainerExecutor
    */
   protected void copyFile(Path src, Path dst, String owner) throws IOException {
     lfs.util().copy(src, dst, false, true);
   }
-  
+
   /**
    * Make a file executable using the {@link #lfs} {@link FileContext}.
    *
    * @param script the path to make executable
-   * @param owner the new owner for the file. Used only in secure Windows
-   * clusters
+   * @param owner  the new owner for the file. Used only in secure Windows
+   *               clusters
    * @throws IOException when the change mode operation fails
    * @see WindowsSecureContainerExecutor
    */
@@ -141,8 +127,8 @@ public class DefaultContainerExecutor extends ContainerExecutor {
   }
 
   @Override
-  public void startLocalizer(LocalizerStartContext ctx)
-      throws IOException, InterruptedException {
+  public void startLocalizer(LocalizerStartContext ctx) throws IOException, InterruptedException {
+    long startTime = System.currentTimeMillis();
     Path nmPrivateContainerTokensPath = ctx.getNmPrivateContainerTokens();
     InetSocketAddress nmAddr = ctx.getNmAddr();
     String user = ctx.getUser();
@@ -150,9 +136,11 @@ public class DefaultContainerExecutor extends ContainerExecutor {
     String locId = ctx.getLocId();
     LocalDirsHandlerService dirsHandler = ctx.getDirsHandler();
 
+    LOG.info("NEUTRON, Start run localization, appId: {}, locId: {}", appId, locId);
+
     List<String> localDirs = dirsHandler.getLocalDirs();
     List<String> logDirs = dirsHandler.getLogDirs();
-    
+
     createUserLocalDirs(localDirs, user);
     createUserCacheDirs(localDirs, user);
     createAppDirs(localDirs, user, appId);
@@ -166,53 +154,60 @@ public class DefaultContainerExecutor extends ContainerExecutor {
     copyFile(nmPrivateContainerTokensPath, tokenDst, user);
     LOG.info("Copying from {} to {}", nmPrivateContainerTokensPath, tokenDst);
 
-
     FileContext localizerFc =
         FileContext.getFileContext(lfs.getDefaultFileSystem(), getConf());
     localizerFc.setUMask(lfs.getUMask());
     localizerFc.setWorkingDirectory(appStorageDir);
-    LOG.info("Localizer CWD set to {} = {}", appStorageDir,
-        localizerFc.getWorkingDirectory());
+    LOG.info("Localizer CWD set to {} = {}", appStorageDir, localizerFc.getWorkingDirectory());
 
     ContainerLocalizer localizer =
-        createContainerLocalizer(user, appId, locId, tokenFn, localDirs,
-            localizerFc);
+        createContainerLocalizer(user, appId, locId, tokenFn, localDirs, localizerFc);
     // TODO: DO it over RPC for maintaining similarity?
     localizer.runLocalization(nmAddr);
+    LOG.info("NEUTRON, Finish run localization, appId: {}, locId: {}, elapse: {}ms",
+        appId, locId, System.currentTimeMillis() - startTime);
   }
 
   /**
    * Create a new {@link ContainerLocalizer} instance.
    *
-   * @param user the user who owns the job for which the localization is being
-   * run
-   * @param appId the ID of the application for which the localization is being
-   * run
-   * @param locId the ID of the container for which the localization is being
-   * run
-   * @param localDirs a list of directories to use as destinations for the
-   * localization
+   * @param user        the user who owns the job for which the localization is being
+   *                    run
+   * @param appId       the ID of the application for which the localization is being
+   *                    run
+   * @param locId       the ID of the container for which the localization is being
+   *                    run
+   * @param localDirs   a list of directories to use as destinations for the
+   *                    localization
    * @param localizerFc the {@link FileContext} to use when localizing files
    * @return the new {@link ContainerLocalizer} instance
    * @throws IOException if {@code user} or {@code locId} is {@code null} or if
-   * the container localizer has an initialization failure
+   *                     the container localizer has an initialization failure
    */
   @Private
   @VisibleForTesting
   protected ContainerLocalizer createContainerLocalizer(String user,
-      String appId, String locId, String tokenFileName, List<String> localDirs,
-      FileContext localizerFc) throws IOException {
-    ContainerLocalizer localizer =
-        new ContainerLocalizer(localizerFc, user, appId, locId, tokenFileName,
-            getPaths(localDirs),
-            RecordFactoryProvider.getRecordFactory(getConf()));
+                                                        String appId, String locId,
+                                                        String tokenFileName,
+                                                        List<String> localDirs,
+                                                        FileContext localizerFc)
+      throws IOException {
+    ContainerLocalizer localizer = new ContainerLocalizer(
+        localizerFc,
+        user,
+        appId,
+        locId,
+        tokenFileName,
+        getPaths(localDirs),
+        RecordFactoryProvider.getRecordFactory(getConf()));
     return localizer;
   }
 
   @Override
-  public int launchContainer(ContainerStartContext ctx)
-      throws IOException, ConfigurationException {
+  public int launchContainer(ContainerStartContext ctx) throws IOException, ConfigurationException {
     Container container = ctx.getContainer();
+    LOG.info("NEUTRON, Start launch container, appId: {}, locId: {}",
+        ctx.getAppId(), container.getContainerId());
     Path nmPrivateContainerScriptPath = ctx.getNmPrivateContainerScriptPath();
     Path nmPrivateTokensPath = ctx.getNmPrivateTokensPath();
     Path nmPrivateKeystorePath = ctx.getNmPrivateKeystorePath();
@@ -227,9 +222,7 @@ public class DefaultContainerExecutor extends ContainerExecutor {
 
     // create container dirs on all disks
     String containerIdStr = containerId.toString();
-    String appIdStr =
-            containerId.getApplicationAttemptId().
-                getApplicationId().toString();
+    String appIdStr = containerId.getApplicationAttemptId().getApplicationId().toString();
     for (String sLocalDir : localDirs) {
       Path usersdir = new Path(sLocalDir, ContainerLocalizer.USERCACHE);
       Path userdir = new Path(usersdir, user);
@@ -242,74 +235,71 @@ public class DefaultContainerExecutor extends ContainerExecutor {
     // Create the container log-dirs on all disks
     createContainerLogDirs(appIdStr, containerIdStr, logDirs, user);
 
-    Path tmpDir = new Path(containerWorkDir,
-        YarnConfiguration.DEFAULT_CONTAINER_TEMP_DIR);
+    Path tmpDir = new Path(containerWorkDir, YarnConfiguration.DEFAULT_CONTAINER_TEMP_DIR);
     createDir(tmpDir, dirPerm, false, user);
 
-
     // copy container tokens to work dir
-    Path tokenDst =
-      new Path(containerWorkDir, ContainerLaunch.FINAL_CONTAINER_TOKENS_FILE);
+    Path tokenDst = new Path(containerWorkDir, ContainerLaunch.FINAL_CONTAINER_TOKENS_FILE);
     copyFile(nmPrivateTokensPath, tokenDst, user);
 
     if (nmPrivateKeystorePath != null) {
-      Path keystoreDst =
-          new Path(containerWorkDir, ContainerLaunch.KEYSTORE_FILE);
+      Path keystoreDst = new Path(containerWorkDir, ContainerLaunch.KEYSTORE_FILE);
       copyFile(nmPrivateKeystorePath, keystoreDst, user);
     }
 
     if (nmPrivateTruststorePath != null) {
-      Path truststoreDst =
-          new Path(containerWorkDir, ContainerLaunch.TRUSTSTORE_FILE);
+      Path truststoreDst = new Path(containerWorkDir, ContainerLaunch.TRUSTSTORE_FILE);
       copyFile(nmPrivateTruststorePath, truststoreDst, user);
     }
 
     // copy launch script to work dir
-    Path launchDst =
-        new Path(containerWorkDir, ContainerLaunch.CONTAINER_SCRIPT);
+    Path launchDst = new Path(containerWorkDir, ContainerLaunch.CONTAINER_SCRIPT);
     copyFile(nmPrivateContainerScriptPath, launchDst, user);
+    LOG.info("Copy {} to {}", nmPrivateContainerScriptPath, launchDst);
 
     // Create new local launch wrapper script
-    LocalWrapperScriptBuilder sb = getLocalWrapperScriptBuilder(
-        containerIdStr, containerWorkDir); 
+    LocalWrapperScriptBuilder sb = getLocalWrapperScriptBuilder(containerIdStr, containerWorkDir);
 
     // Fail fast if attempting to launch the wrapper script would fail due to
     // Windows path length limitation.
-    if (Shell.WINDOWS &&
-        sb.getWrapperScriptPath().toString().length() > WIN_MAX_PATH) {
+    if (Shell.WINDOWS && sb.getWrapperScriptPath().toString().length() > WIN_MAX_PATH) {
       throw new IOException(String.format(
-        "Cannot launch container using script at path %s, because it exceeds " +
-        "the maximum supported path length of %d characters.  Consider " +
-        "configuring shorter directories in %s.", sb.getWrapperScriptPath(),
-        WIN_MAX_PATH, YarnConfiguration.NM_LOCAL_DIRS));
+          "Cannot launch container using script at path %s, because it exceeds " +
+              "the maximum supported path length of %d characters.  Consider " +
+              "configuring shorter directories in %s.", sb.getWrapperScriptPath(),
+          WIN_MAX_PATH, YarnConfiguration.NM_LOCAL_DIRS));
     }
 
     Path pidFile = getPidFilePath(containerId);
     if (pidFile != null) {
       sb.writeLocalWrapperScript(launchDst, pidFile);
     } else {
-      LOG.info("Container {} pid file not set. Returning terminated error",
-          containerIdStr);
+      LOG.warn("Container {} pid file not set. Returning terminated error", containerIdStr);
       return ExitCode.TERMINATED.getExitCode();
     }
-    
-    // create log dir under app
-    // fork script
+
+    // create log dir under app fork script
     Shell.CommandExecutor shExec = null;
     try {
       setScriptExecutable(launchDst, user);
       setScriptExecutable(sb.getWrapperScriptPath(), user);
+      LOG.info("Launch script is [{}]", sb.getWrapperScriptPath());
 
-      shExec = buildCommandExecutor(sb.getWrapperScriptPath().toString(),
-          containerIdStr, user, pidFile, container.getResource(),
+      shExec = buildCommandExecutor(
+          sb.getWrapperScriptPath().toString(),
+          containerIdStr,
+          user,
+          pidFile,
+          container.getResource(),
           new File(containerWorkDir.toUri().getPath()),
-          container.getLaunchContext().getEnvironment());
-      
+          container.getLaunchContext().getEnvironment()
+      );
+
+
       if (isContainerActive(containerId)) {
         shExec.execute();
       } else {
-        LOG.info("Container {} was marked as inactive. "
-            + "Returning terminated error", containerIdStr);
+        LOG.info("Container {} was marked as inactive. Returning terminated error", containerIdStr);
         return ExitCode.TERMINATED.getExitCode();
       }
     } catch (IOException e) {
@@ -331,25 +321,26 @@ public class DefaultContainerExecutor extends ContainerExecutor {
             .append("Container id: ").append(containerId).append("\n")
             .append("Exit code: ").append(exitCode).append("\n");
         if (!Optional.ofNullable(e.getMessage()).orElse("").isEmpty()) {
-          builder.append("Exception message: ")
-              .append(e.getMessage()).append("\n");
+          builder.append("Exception message: ").append(e.getMessage()).append("\n");
         }
 
         if (!shExec.getOutput().isEmpty()) {
-          builder.append("Shell output: ")
-              .append(shExec.getOutput()).append("\n");
+          builder.append("Shell output: ").append(shExec.getOutput()).append("\n");
         }
         String diagnostics = builder.toString();
         logOutput(diagnostics);
-        container.handle(new ContainerDiagnosticsUpdateEvent(containerId,
-            diagnostics));
+        container.handle(new ContainerDiagnosticsUpdateEvent(containerId, diagnostics));
       } else {
         container.handle(new ContainerDiagnosticsUpdateEvent(containerId,
             "Container killed on request. Exit code is " + exitCode));
       }
       return exitCode;
     } finally {
-      if (shExec != null) shExec.close();
+      LOG.info("[AFTER] start launch container, appId: {}, locId: {}",
+          ctx.getAppId(), container.getContainerId());
+      if (shExec != null) {
+        shExec.close();
+      }
     }
     return 0;
   }
@@ -364,25 +355,28 @@ public class DefaultContainerExecutor extends ContainerExecutor {
    * Create a new {@link ShellCommandExecutor} using the parameters.
    *
    * @param wrapperScriptPath the path to the script to execute
-   * @param containerIdStr the container ID
-   * @param user the application owner's username
-   * @param pidFile the path to the container's PID file
-   * @param resource this parameter controls memory and CPU limits.
-   * @param workDir If not-null, specifies the directory which should be set
-   * as the current working directory for the command. If null,
-   * the current working directory is not modified.
-   * @param environment the container environment
+   * @param containerIdStr    the container ID
+   * @param user              the application owner's username
+   * @param pidFile           the path to the container's PID file
+   * @param resource          this parameter controls memory and CPU limits.
+   * @param workDir           If not-null, specifies the directory which should be set
+   *                          as the current working directory for the command. If null,
+   *                          the current working directory is not modified.
+   * @param environment       the container environment
    * @return the new {@link ShellCommandExecutor}
    * @see ShellCommandExecutor
    */
-  protected CommandExecutor buildCommandExecutor(String wrapperScriptPath, 
-      String containerIdStr, String user, Path pidFile, Resource resource,
-      File workDir, Map<String, String> environment) {
-    
-    String[] command = getRunCommand(wrapperScriptPath,
-        containerIdStr, user, pidFile, this.getConf(), resource);
+  protected CommandExecutor buildCommandExecutor(String wrapperScriptPath,
+                                                 String containerIdStr,
+                                                 String user,
+                                                 Path pidFile,
+                                                 Resource resource,
+                                                 File workDir, Map<String, String> environment) {
 
-    LOG.info("launchContainer: {}", Arrays.toString(command));
+    String[] command = getRunCommand(
+        wrapperScriptPath, containerIdStr, user, pidFile, this.getConf(), resource);
+
+    LOG.info("Launch container {}, command: {}", containerIdStr, Arrays.toString(command));
     return new ShellCommandExecutor(
         command,
         workDir,
@@ -395,15 +389,15 @@ public class DefaultContainerExecutor extends ContainerExecutor {
    * Create a {@link LocalWrapperScriptBuilder} for the given container ID
    * and path that is appropriate to the current platform.
    *
-   * @param containerIdStr the container ID
+   * @param containerIdStr   the container ID
    * @param containerWorkDir the container's working directory
    * @return a new {@link LocalWrapperScriptBuilder}
    */
   protected LocalWrapperScriptBuilder getLocalWrapperScriptBuilder(
       String containerIdStr, Path containerWorkDir) {
-   return  Shell.WINDOWS ?
-       new WindowsLocalWrapperScriptBuilder(containerIdStr, containerWorkDir) :
-       new UnixLocalWrapperScriptBuilder(containerWorkDir);
+    return Shell.WINDOWS ?
+        new WindowsLocalWrapperScriptBuilder(containerIdStr, containerWorkDir) :
+        new UnixLocalWrapperScriptBuilder(containerWorkDir);
   }
 
   /**
@@ -428,7 +422,7 @@ public class DefaultContainerExecutor extends ContainerExecutor {
      * will create the script at the configured wrapper script path.
      *
      * @param launchDst the script to launch
-     * @param pidFile the file that will hold the PID
+     * @param pidFile   the file that will hold the PID
      * @throws IOException if the wrapper script cannot be created
      * @see #getWrapperScriptPath
      */
@@ -446,11 +440,11 @@ public class DefaultContainerExecutor extends ContainerExecutor {
      * Write out the wrapper script for the container launch script.
      *
      * @param launchDst the script to launch
-     * @param pidFile the file that will hold the PID
-     * @param pout the stream to use to write out the wrapper script
+     * @param pidFile   the file that will hold the PID
+     * @param pout      the stream to use to write out the wrapper script
      */
     protected abstract void writeLocalWrapperScript(Path launchDst,
-        Path pidFile, PrintStream pout);
+                                                    Path pidFile, PrintStream pout);
 
     /**
      * Create an instance for the given container working directory.
@@ -459,7 +453,7 @@ public class DefaultContainerExecutor extends ContainerExecutor {
      */
     protected LocalWrapperScriptBuilder(Path containerWorkDir) {
       this.wrapperScriptPath = new Path(containerWorkDir,
-        Shell.appendScriptExtension("default_container_executor"));
+          Shell.appendScriptExtension("default_container_executor"));
     }
   }
 
@@ -491,7 +485,7 @@ public class DefaultContainerExecutor extends ContainerExecutor {
 
     @Override
     public void writeLocalWrapperScript(Path launchDst, Path pidFile,
-        PrintStream pout) {
+                                        PrintStream pout) {
       String exitCodeFile = ContainerLaunch.getExitCodeFile(
           pidFile.toString());
       String tmpFile = exitCodeFile + ".tmp";
@@ -516,7 +510,7 @@ public class DefaultContainerExecutor extends ContainerExecutor {
         pout.println();
         pout.println("echo $$ > " + pidFile.toString() + ".tmp");
         pout.println("/bin/mv -f " + pidFile.toString() + ".tmp " + pidFile);
-        String exec = Shell.isSetsidAvailable? "exec setsid" : "exec";
+        String exec = Shell.isSetsidAvailable ? "exec setsid" : "exec";
         pout.printf("%s /bin/bash \"%s\"", exec, launchDst.toUri().getPath());
       }
       lfs.setPermission(sessionScriptPath,
@@ -536,11 +530,11 @@ public class DefaultContainerExecutor extends ContainerExecutor {
     /**
      * Create an instance for the given container and working directory.
      *
-     * @param containerIdStr the container ID
+     * @param containerIdStr   the container ID
      * @param containerWorkDir the container's working directory
      */
     public WindowsLocalWrapperScriptBuilder(String containerIdStr,
-        Path containerWorkDir) {
+                                            Path containerWorkDir) {
 
       super(containerWorkDir);
       this.containerIdStr = containerIdStr;
@@ -548,7 +542,7 @@ public class DefaultContainerExecutor extends ContainerExecutor {
 
     @Override
     public void writeLocalWrapperScript(Path launchDst, Path pidFile,
-        PrintStream pout) {
+                                        PrintStream pout) {
       // TODO: exit code script for Windows
 
       // On Windows, the pid is the container ID, so that it can also serve as
@@ -556,9 +550,9 @@ public class DefaultContainerExecutor extends ContainerExecutor {
       // Write to temp file followed by atomic move.
       String normalizedPidFile = new File(pidFile.toString()).getPath();
       pout.println("@echo " + containerIdStr + " > " + normalizedPidFile +
-        ".tmp");
+          ".tmp");
       pout.println("@move /Y " + normalizedPidFile + ".tmp " +
-        normalizedPidFile);
+          normalizedPidFile);
       pout.println("@call " + launchDst.toString());
     }
   }
@@ -606,7 +600,7 @@ public class DefaultContainerExecutor extends ContainerExecutor {
 
   /**
    * Returns true if the process with the specified pid is alive.
-   * 
+   *
    * @param pid String pid
    * @return boolean true if the process is alive
    * @throws IOException if the command to test process liveliness fails
@@ -615,11 +609,10 @@ public class DefaultContainerExecutor extends ContainerExecutor {
   public static boolean containerIsAlive(String pid) throws IOException {
     try {
       new ShellCommandExecutor(Shell.getCheckProcessIsAliveCommand(pid))
-        .execute();
+          .execute();
       // successful execution means process is alive
       return true;
-    }
-    catch (ExitCodeException e) {
+    } catch (ExitCodeException e) {
       // failure (non-zero exit code) means process is not alive
       return false;
     }
@@ -628,13 +621,13 @@ public class DefaultContainerExecutor extends ContainerExecutor {
   /**
    * Send a specified signal to the specified pid
    *
-   * @param pid the pid of the process [group] to signal.
+   * @param pid    the pid of the process [group] to signal.
    * @param signal signal to send
    * @throws IOException if the command to kill the process fails
    */
   protected void killContainer(String pid, Signal signal) throws IOException {
     new ShellCommandExecutor(Shell.getSignalKillCommand(signal.getValue(), pid))
-      .execute();
+        .execute();
   }
 
   @Override
@@ -673,22 +666,22 @@ public class DefaultContainerExecutor extends ContainerExecutor {
    * Permissions for user dir.
    * $local.dir/usercache/$user
    */
-  static final short USER_PERM = (short)0750;
+  static final short USER_PERM = (short) 0750;
   /**
    * Permissions for user appcache dir.
    * $local.dir/usercache/$user/appcache
    */
-  static final short APPCACHE_PERM = (short)0710;
+  static final short APPCACHE_PERM = (short) 0710;
   /**
    * Permissions for user filecache dir.
    * $local.dir/usercache/$user/filecache
    */
-  static final short FILECACHE_PERM = (short)0710;
+  static final short FILECACHE_PERM = (short) 0710;
   /**
    * Permissions for user app dir.
    * $local.dir/usercache/$user/appcache/$appId
    */
-  static final short APPDIR_PERM = (short)0710;
+  static final short APPDIR_PERM = (short) 0710;
 
   private long getDiskFreeSpace(Path base) throws IOException {
     return lfs.getFsStatus(base).getRemaining();
@@ -718,14 +711,14 @@ public class DefaultContainerExecutor extends ContainerExecutor {
    * its size.
    *
    * @param localDirs the target directories from which to select
-   * @param user the user who owns the application
-   * @param appId the application ID
+   * @param user      the user who owns the application
+   * @param appId     the application ID
    * @return the selected directory
    * @throws IOException if no application directories for the user can be
-   * found
+   *                     found
    */
   protected Path getWorkingDir(List<String> localDirs, String user,
-      String appId) throws IOException {
+                               String appId) throws IOException {
     long totalAvailable = 0L;
     long[] availableOnDisk = new long[localDirs.size()];
     int i = 0;
@@ -782,16 +775,16 @@ public class DefaultContainerExecutor extends ContainerExecutor {
   /**
    * Use the {@link #lfs} {@link FileContext} to create the target directory.
    *
-   * @param dirPath the target directory
-   * @param perms the target permissions for the target directory
+   * @param dirPath      the target directory
+   * @param perms        the target permissions for the target directory
    * @param createParent whether the parent directories should also be created
-   * @param user the user as whom the target directory should be created.
-   * Used only on secure Windows hosts.
+   * @param user         the user as whom the target directory should be created.
+   *                     Used only on secure Windows hosts.
    * @throws IOException if there's a failure performing a file operation
    * @see WindowsSecureContainerExecutor
    */
   protected void createDir(Path dirPath, FsPermission perms,
-      boolean createParent, String user) throws IOException {
+                           boolean createParent, String user) throws IOException {
     lfs.mkdir(dirPath, perms, createParent);
     if (!perms.equals(perms.applyUMask(lfs.getUMask()))) {
       lfs.setPermission(dirPath, perms);
@@ -805,9 +798,9 @@ public class DefaultContainerExecutor extends ContainerExecutor {
    * </ul>
    *
    * @param localDirs the target directories to create
-   * @param user the user whose local cache directories should be initialized
+   * @param user      the user whose local cache directories should be initialized
    * @throws IOException if there's an issue initializing the user local
-   * directories
+   *                     directories
    */
   void createUserLocalDirs(List<String> localDirs, String user)
       throws IOException {
@@ -816,8 +809,7 @@ public class DefaultContainerExecutor extends ContainerExecutor {
     for (String localDir : localDirs) {
       // create $local.dir/usercache/$user and its immediate parent
       try {
-        createDir(getUserCacheDir(new Path(localDir), user), userperms, true,
-            user);
+        createDir(getUserCacheDir(new Path(localDir), user), userperms, true, user);
       } catch (IOException e) {
         LOG.warn("Unable to create the user directory : {}", localDir, e);
         continue;
@@ -840,9 +832,9 @@ public class DefaultContainerExecutor extends ContainerExecutor {
    * </ul>
    *
    * @param localDirs the target directories to create
-   * @param user the user whose local cache directories should be initialized
+   * @param user      the user whose local cache directories should be initialized
    * @throws IOException if there's an issue initializing the cache
-   * directories
+   *                     directories
    */
   void createUserCacheDirs(List<String> localDirs, String user)
       throws IOException {
@@ -891,10 +883,10 @@ public class DefaultContainerExecutor extends ContainerExecutor {
    * </ul>
    *
    * @param localDirs the target directories to create
-   * @param user the user whose local cache directories should be initialized
-   * @param appId the application ID
+   * @param user      the user whose local cache directories should be initialized
+   * @param appId     the application ID
    * @throws IOException if there's an issue initializing the application
-   * directories
+   *                     directories
    */
   void createAppDirs(List<String> localDirs, String user, String appId)
       throws IOException {
@@ -921,11 +913,11 @@ public class DefaultContainerExecutor extends ContainerExecutor {
   /**
    * Create application log directories on all disks.
    *
-   * @param appId the application ID
+   * @param appId   the application ID
    * @param logDirs the target directories to create
-   * @param user the user whose local cache directories should be initialized
+   * @param user    the user whose local cache directories should be initialized
    * @throws IOException if there's an issue initializing the application log
-   * directories
+   *                     directories
    */
   void createAppLogDirs(String appId, List<String> logDirs, String user)
       throws IOException {
@@ -953,16 +945,16 @@ public class DefaultContainerExecutor extends ContainerExecutor {
   /**
    * Create application log directories on all disks.
    *
-   * @param appId the application ID
+   * @param appId       the application ID
    * @param containerId the container ID
-   * @param logDirs the target directories to create
-   * @param user the user as whom the directories should be created.
-   * Used only on secure Windows hosts.
+   * @param logDirs     the target directories to create
+   * @param user        the user as whom the directories should be created.
+   *                    Used only on secure Windows hosts.
    * @throws IOException if there's an issue initializing the container log
-   * directories
+   *                     directories
    */
   void createContainerLogDirs(String appId, String containerId,
-      List<String> logDirs, String user) throws IOException {
+                              List<String> logDirs, String user) throws IOException {
     boolean containerLogDirStatus = false;
     FsPermission containerLogDirPerms = new
         FsPermission(getLogDirPermissions());
@@ -994,7 +986,7 @@ public class DefaultContainerExecutor extends ContainerExecutor {
    */
   @VisibleForTesting
   public String getLogDirPermissions() {
-    if (this.logDirPermissions==null) {
+    if (this.logDirPermissions == null) {
       this.logDirPermissions = getConf().get(
           YarnConfiguration.NM_DEFAULT_CONTAINER_EXECUTOR_LOG_DIRS_PERMISSIONS,
           YarnConfiguration.NM_DEFAULT_CONTAINER_EXECUTOR_LOG_DIRS_PERMISSIONS_DEFAULT);
@@ -1011,7 +1003,6 @@ public class DefaultContainerExecutor extends ContainerExecutor {
   }
 
   /**
-   *
    * @param ctx Encapsulates information necessary for exec containers.
    * @return the input/output stream of interactive docker shell.
    * @throws ContainerExecutionException
@@ -1037,7 +1028,7 @@ public class DefaultContainerExecutor extends ContainerExecutor {
 
   @Override
   public void updateYarnSysFS(Context ctx, String user,
-      String appId, String spec) throws IOException {
+                              String appId, String spec) throws IOException {
     throw new ServiceStateException("Implementation unavailable");
   }
 }

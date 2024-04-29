@@ -18,16 +18,6 @@
 
 package org.apache.hadoop.yarn.conf;
 
-import java.net.InetSocketAddress;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-import java.util.concurrent.TimeUnit;
-
 import org.apache.hadoop.HadoopIllegalArgumentException;
 import org.apache.hadoop.classification.InterfaceAudience.Private;
 import org.apache.hadoop.classification.InterfaceAudience.Public;
@@ -41,6 +31,10 @@ import org.apache.hadoop.net.NetUtils;
 import org.apache.hadoop.util.BasicDiskValidator;
 import org.apache.hadoop.util.StringUtils;
 import org.apache.hadoop.yarn.api.ApplicationConstants;
+
+import java.net.InetSocketAddress;
+import java.util.*;
+import java.util.concurrent.TimeUnit;
 
 @Public
 @Evolving
@@ -1286,6 +1280,9 @@ public class YarnConfiguration extends Configuration {
   /** who will execute(launch) the containers.*/
   public static final String NM_CONTAINER_EXECUTOR =
     NM_PREFIX + "container-executor.class";
+
+  public static final String NM_RESOURCE_LOCALIZATION_SERVICE =
+      NM_PREFIX + "resource-location.service.class";
 
   /** List of container state transition listeners.*/
   public static final String NM_CONTAINER_STATE_TRANSITION_LISTENERS =
