@@ -1287,6 +1287,9 @@ public class YarnConfiguration extends Configuration {
   public static final String NM_CONTAINER_EXECUTOR =
     NM_PREFIX + "container-executor.class";
 
+  public static final String NM_RESOURCE_LOCALIZATION_SERVICE =
+      NM_PREFIX + "resource-location.service.class";
+
   /** List of container state transition listeners.*/
   public static final String NM_CONTAINER_STATE_TRANSITION_LISTENERS =
       NM_PREFIX + "container-state-transition-listener.classes";

@@ -54,6 +54,7 @@ import org.apache.hadoop.yarn.server.nodemanager.containermanager.linux.runtime.
 import org.apache.hadoop.yarn.server.nodemanager.containermanager.linux.runtime.runc.RuncContainerExecutorConfig.OCIRuntimeConfig.OCIProcessConfig;
 import org.apache.hadoop.yarn.server.nodemanager.containermanager.linux.runtime.runc.RuncImageTagToManifestPlugin;
 import org.apache.hadoop.yarn.server.nodemanager.containermanager.linux.runtime.runc.RuncManifestToResourcesPlugin;
+import org.apache.hadoop.yarn.server.nodemanager.containermanager.localizer.AbstractResourceLocalizationService;
 import org.apache.hadoop.yarn.server.nodemanager.containermanager.localizer.LocalResourceRequest;
 import org.apache.hadoop.yarn.server.nodemanager.containermanager.localizer.LocalizedResource;
 import org.apache.hadoop.yarn.server.nodemanager.containermanager.localizer.ResourceLocalizationService;
@@ -318,7 +319,7 @@ public class RuncContainerRuntime extends OCIContainerRuntime {
         container.getContainerRuntimeData(RuncRuntimeObject.class);
     List<LocalResource> layerResources = runcRuntimeObject.getOCILayers();
 
-    ResourceLocalizationService localizationService =
+    AbstractResourceLocalizationService localizationService =
         nmContext.getContainerManager().getResourceLocalizationService();
 
     List<String> args = new ArrayList<>();
