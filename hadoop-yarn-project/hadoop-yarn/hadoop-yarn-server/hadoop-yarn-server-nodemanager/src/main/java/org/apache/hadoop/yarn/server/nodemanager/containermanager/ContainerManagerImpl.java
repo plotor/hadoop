@@ -24,7 +24,10 @@ import org.apache.hadoop.util.ReflectionUtils;
 import org.apache.hadoop.yarn.api.protocolrecords.GetLocalizationStatusesRequest;
 import org.apache.hadoop.yarn.api.protocolrecords.GetLocalizationStatusesResponse;
 import org.apache.hadoop.yarn.api.records.LocalizationStatus;
+import org.apache.hadoop.yarn.event.Dispatcher;
+import org.apache.hadoop.yarn.server.nodemanager.*;
 import org.apache.hadoop.yarn.server.nodemanager.containermanager.container.UpdateContainerTokenEvent;
+import org.apache.hadoop.yarn.server.nodemanager.containermanager.localizer.AbstractResourceLocalizationService;
 import org.apache.hadoop.yarn.server.nodemanager.containermanager.loghandler.event.LogHandlerTokenUpdatedEvent;
 import org.apache.hadoop.yarn.server.nodemanager.containermanager.scheduler.ContainerSchedulerEvent;
 import org.apache.hadoop.yarn.server.nodemanager.recovery.RecoveryIterator;
@@ -104,19 +107,7 @@ import org.apache.hadoop.yarn.server.api.AuxiliaryLocalPathHandler;
 import org.apache.hadoop.yarn.server.api.ContainerType;
 import org.apache.hadoop.yarn.server.api.records.ContainerQueuingLimit;
 import org.apache.hadoop.yarn.server.api.records.OpportunisticContainersStatus;
-import org.apache.hadoop.yarn.server.nodemanager.CMgrCompletedAppsEvent;
-import org.apache.hadoop.yarn.server.nodemanager.CMgrCompletedContainersEvent;
-import org.apache.hadoop.yarn.server.nodemanager.CMgrUpdateContainersEvent;
-import org.apache.hadoop.yarn.server.nodemanager.CMgrSignalContainersEvent;
-import org.apache.hadoop.yarn.server.nodemanager.ContainerExecutor;
-import org.apache.hadoop.yarn.server.nodemanager.ContainerManagerEvent;
-import org.apache.hadoop.yarn.server.nodemanager.Context;
-import org.apache.hadoop.yarn.server.nodemanager.DeletionService;
-import org.apache.hadoop.yarn.server.nodemanager.LocalDirsHandlerService;
-import org.apache.hadoop.yarn.server.nodemanager.NMAuditLogger;
 import org.apache.hadoop.yarn.server.nodemanager.NMAuditLogger.AuditConstants;
-import org.apache.hadoop.yarn.server.nodemanager.NodeManager;
-import org.apache.hadoop.yarn.server.nodemanager.NodeStatusUpdater;
 import org.apache.hadoop.yarn.server.nodemanager.amrmproxy.AMRMProxyService;
 import org.apache.hadoop.yarn.server.nodemanager.containermanager.application.Application;
 import org.apache.hadoop.yarn.server.nodemanager.containermanager.application.ApplicationContainerInitEvent;
@@ -171,6 +162,7 @@ import org.apache.hadoop.yarn.util.timeline.TimelineUtils;
 
 import java.io.DataInputStream;
 import java.io.IOException;
+import java.lang.reflect.Constructor;
 import java.net.InetSocketAddress;
 import java.net.URISyntaxException;
 import java.nio.ByteBuffer;
@@ -209,7 +201,7 @@ public class ContainerManagerImpl extends CompositeService implements
   protected final Context context;
   private final ContainersMonitor containersMonitor;
   private Server server;
-  private final ResourceLocalizationService rsrcLocalizationSrvc;
+  private final AbstractResourceLocalizationService rsrcLocalizationSrvc;
   private final AbstractContainersLauncher containersLauncher;
   private final AuxServices auxiliaryServices;
   @VisibleForTesting final NodeManagerMetrics metrics;
@@ -551,11 +543,53 @@ public class ContainerManagerImpl extends CompositeService implements
     return this.containersMonitor;
   }
 
-  protected ResourceLocalizationService createResourceLocalizationService(
+  protected AbstractResourceLocalizationService createResourceLocalizationService(
       ContainerExecutor exec, DeletionService deletionContext,
       Context nmContext, NodeManagerMetrics nmMetrics) {
-    return new ResourceLocalizationService(this.dispatcher, exec,
-        deletionContext, dirsHandler, nmContext, nmMetrics);
+    Configuration conf = nmContext.getConf();
+    Class<?> rlsClass = conf.getClass(YarnConfiguration.NM_RESOURCE_LOCALIZATION_SERVICE,
+        ResourceLocalizationService.class, AbstractResourceLocalizationService.class);
+    if (null == rlsClass || ResourceLocalizationService.class.equals(rlsClass)) {
+      return new ResourceLocalizationService(
+          dispatcher, exec, deletionContext, dirsHandler, nmContext, nmMetrics);
+    }
+
+    Class<? extends ContainerExecutor> ceClass =
+        conf.getClass(YarnConfiguration.NM_CONTAINER_EXECUTOR,
+            DefaultContainerExecutor.class, ContainerExecutor.class);
+    if (DefaultContainerExecutor.class.equals(ceClass)
+        || LinuxContainerExecutor.class.equals(ceClass)) {
+      LOG.warn("Use {}, and ignore {} config.",
+          ceClass.getCanonicalName(), YarnConfiguration.NM_RESOURCE_LOCALIZATION_SERVICE);
+      return new ResourceLocalizationService(
+          dispatcher, exec, deletionContext, dirsHandler, nmContext, nmMetrics);
+    }
+
+    LOG.info("Use resource localization service: {}", rlsClass);
+    try {
+      Constructor<?> constructor = rlsClass.getConstructor(
+          String.class,
+          ContainerExecutor.class,
+          Dispatcher.class,
+          DeletionService.class,
+          LocalDirsHandlerService.class,
+          Context.class,
+          NodeManagerMetrics.class
+      );
+      constructor.setAccessible(true);
+      return (AbstractResourceLocalizationService) constructor.newInstance(
+          rlsClass.getName(),
+          exec,
+          dispatcher,
+          deletionContext,
+          dirsHandler,
+          nmContext,
+          nmMetrics
+      );
+    } catch (Exception e) {
+      throw new YarnRuntimeException(
+          "Unable to instantiate resource localization service: " + rlsClass, e);
+    }
   }
 
   protected SharedCacheUploadService createSharedCacheUploaderService() {
@@ -2031,7 +2065,7 @@ public class ContainerManagerImpl extends CompositeService implements
     return container.getLocalizationStatuses();
   }
 
-  public ResourceLocalizationService getResourceLocalizationService() {
+  public AbstractResourceLocalizationService getResourceLocalizationService() {
     return rsrcLocalizationSrvc;
   }
 }

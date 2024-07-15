@@ -49,7 +49,6 @@ import java.util.concurrent.ExecutorCompletionService;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 
@@ -72,13 +71,11 @@ import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.security.token.Token;
 import org.apache.hadoop.security.token.TokenIdentifier;
 import org.apache.hadoop.service.AbstractService;
-import org.apache.hadoop.service.CompositeService;
 import org.apache.hadoop.util.DiskChecker;
 import org.apache.hadoop.util.DiskValidator;
 import org.apache.hadoop.util.DiskValidatorFactory;
 import org.apache.hadoop.util.StringUtils;
 import org.apache.hadoop.util.concurrent.HadoopExecutors;
-import org.apache.hadoop.util.concurrent.HadoopScheduledThreadPoolExecutor;
 import org.apache.hadoop.yarn.api.records.ApplicationId;
 import org.apache.hadoop.yarn.api.records.ContainerId;
 import org.apache.hadoop.yarn.api.records.LocalResource;
@@ -134,7 +131,6 @@ import org.apache.hadoop.yarn.server.nodemanager.containermanager.localizer.secu
 import org.apache.hadoop.yarn.server.nodemanager.containermanager.localizer.security.LocalizerTokenSecretManager;
 import org.apache.hadoop.yarn.server.nodemanager.executor.LocalizerStartContext;
 import org.apache.hadoop.yarn.server.nodemanager.metrics.NodeManagerMetrics;
-import org.apache.hadoop.yarn.server.nodemanager.recovery.NMStateStoreService;
 import org.apache.hadoop.yarn.server.nodemanager.recovery.NMStateStoreService.LocalResourceTrackerState;
 import org.apache.hadoop.yarn.server.nodemanager.recovery.NMStateStoreService.RecoveredLocalizationState;
 import org.apache.hadoop.yarn.server.nodemanager.recovery.NMStateStoreService.RecoveredUserResources;
@@ -148,15 +144,10 @@ import org.apache.hadoop.thirdparty.com.google.common.cache.CacheBuilder;
 import org.apache.hadoop.thirdparty.com.google.common.cache.LoadingCache;
 import org.apache.hadoop.thirdparty.com.google.common.util.concurrent.ThreadFactoryBuilder;
 
-public class ResourceLocalizationService extends CompositeService
-    implements EventHandler<LocalizationEvent>, LocalizationProtocol {
+public class ResourceLocalizationService extends AbstractResourceLocalizationService {
 
   private static final Logger LOG =
-       LoggerFactory.getLogger(ResourceLocalizationService.class);
-  public static final String NM_PRIVATE_DIR = "nmPrivate";
-  public static final FsPermission NM_PRIVATE_PERM = new FsPermission((short) 0700);
-  private static final FsPermission PUBLIC_FILECACHE_FOLDER_PERMS =
-      new FsPermission((short) 0755);
+      LoggerFactory.getLogger(ResourceLocalizationService.class);
 
   private Server server;
   private InetSocketAddress localizationServerAddress;
@@ -164,24 +155,15 @@ public class ResourceLocalizationService extends CompositeService
   long cacheTargetSize;
   private long cacheCleanupPeriod;
 
-  private final ContainerExecutor exec;
-  protected final Dispatcher dispatcher;
-  private final DeletionService delService;
   private LocalizerTracker localizerTracker;
   private RecordFactory recordFactory;
-  private final ScheduledExecutorService cacheCleanup;
   private LocalizerTokenSecretManager secretManager;
-  private NMStateStoreService stateStore;
-  @VisibleForTesting
-  final NodeManagerMetrics metrics;
 
   @VisibleForTesting
   LocalResourcesTracker publicRsrc;
 
-  private LocalDirsHandlerService dirsHandler;
   private DirsChangeListener localDirsChangeListener;
   private DirsChangeListener logDirsChangeListener;
-  private Context nmContext;
   private DiskValidator diskValidator;
 
   /**
@@ -202,23 +184,13 @@ public class ResourceLocalizationService extends CompositeService
   FileContext lfs;
 
   public ResourceLocalizationService(Dispatcher dispatcher,
-      ContainerExecutor exec, DeletionService delService,
-      LocalDirsHandlerService dirsHandler, Context context,
-      NodeManagerMetrics metrics) {
-
-    super(ResourceLocalizationService.class.getName());
-    this.exec = exec;
-    this.dispatcher = dispatcher;
-    this.delService = delService;
-    this.dirsHandler = dirsHandler;
-
-    this.cacheCleanup = new HadoopScheduledThreadPoolExecutor(1,
-        new ThreadFactoryBuilder()
-          .setNameFormat("ResourceLocalizationService Cache Cleanup")
-          .build());
-    this.stateStore = context.getNMStateStore();
-    this.nmContext = context;
-    this.metrics = metrics;
+       ContainerExecutor exec, DeletionService delService,
+       LocalDirsHandlerService dirsHandler, Context context,
+       NodeManagerMetrics metrics) {
+    super(
+        ResourceLocalizationService.class.getName(),
+        exec, dispatcher, delService, dirsHandler, context, metrics
+    );
   }
 
   FileContext getLocalFileContext(Configuration conf) {
@@ -297,6 +269,7 @@ public class ResourceLocalizationService extends CompositeService
   }
 
   //Recover localized resources after an NM restart
+  @Override
   public void recoverLocalizedResources(RecoveredLocalizationState state)
       throws URISyntaxException, IOException {
     LocalResourceTrackerState trackerState = state.getPublicTrackerState();
@@ -1702,6 +1675,7 @@ public class ResourceLocalizationService extends CompositeService
     return localDirPathFsPermissionsMap;
   }
 
+  @Override
   public LocalizedResource getLocalizedResource(LocalResourceRequest req,
       String user, ApplicationId appId) {
     LocalResourcesTracker tracker =
